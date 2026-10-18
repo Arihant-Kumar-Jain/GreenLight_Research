@@ -30,9 +30,9 @@ function Nav() {
   return (
     <header className="fixed inset-x-0 top-0 z-30 border-b border-line/70 bg-bg/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
-        <a href="#/" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="flex items-center gap-2.5">
+        <a href="#/" aria-label="GreenLight Research, back to top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }) }} className="flex items-center gap-2.5">
           <Mark />
-          <span className="font-display text-[21px] font-medium tracking-tight">GreenLight Research</span>
+          <span className="hidden font-display text-[21px] font-medium tracking-tight sm:inline">GreenLight Research</span>
         </a>
         <nav className="flex items-center gap-1 text-[15px]">
           {[['How it works', 'how'], ['Sources', 'sources'], ['Compare', 'compare']].map(([label, id]) => (

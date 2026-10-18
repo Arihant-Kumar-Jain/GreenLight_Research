@@ -8,9 +8,9 @@ import { Card, cx, LIGHT, timeAgo } from './ui'
 
 export function Logo() {
   return (
-    <a href="#/app" className="flex items-center gap-2.5">
+    <a href="#/app" aria-label="GreenLight Research home" className="flex items-center gap-2.5">
       <Mark />
-      <span className="font-display text-[20px] font-medium tracking-tight">GreenLight Research</span>
+      <span className="hidden font-display text-[20px] font-medium tracking-tight sm:inline">GreenLight Research</span>
     </a>
   )
 }
