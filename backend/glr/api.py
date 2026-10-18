@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, db, evals, graph, llm, papers, pipeline, privacy, providers, rerank, web
+from . import auth, db, evals, graph, kg, llm, papers, pipeline, privacy, providers, rerank, web
 from .agents import chat, intake
 from .config import REPO_DIR, missing_keys, settings
 from .privacy import scrub_secrets
@@ -267,6 +267,18 @@ async def get_graph(pid: str, refresh: bool = False, user: User = CurrentUser):
         g = await graph.build(pid)
         db.cache_put(key, g)
         return g
+
+
+@app.get("/api/projects/{pid}/knowledge")
+async def get_knowledge(pid: str, refresh: bool = False, user: User = CurrentUser):
+    _project_or_404(pid, user)
+    key = f"kg:{pid}:{len(db.papers(pid))}"
+    async with _graph_locks.setdefault(pid + ":kg", asyncio.Lock()):
+        if not refresh and (hit := db.cache_get(key)) is not None:
+            return hit
+        out = await kg.build(pid)
+        db.cache_put(key, out)
+        return out
 
 
 class Pair(BaseModel):

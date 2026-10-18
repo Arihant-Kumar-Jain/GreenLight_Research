@@ -167,3 +167,9 @@ def test_ruling_accepts_ultra_aliases():
     from glr.agents.chamber import Ruling
     assert Ruling.model_validate({"verdict": "red"}).light == "red"
     assert Ruling.model_validate({"verdict": "Not novel - AMBER at best", "summary": "x"}).light == "amber"
+
+
+def test_kg_merge_key_and_vague_filter():
+    from glr import kg
+    assert kg.key("Mixture-of-Experts (MoE)") == kg.key("mixture of experts")
+    assert kg.VAGUE.search("five benchmarks") and kg.VAGUE.search("existing benchmark") and not kg.VAGUE.search("MMLU")

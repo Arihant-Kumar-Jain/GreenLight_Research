@@ -11,7 +11,7 @@ One Budget caps the whole run (GLR_MAX_USD_PER_RUN); stage progress is written t
 import asyncio
 import traceback
 
-from . import db, graph, papers, trace
+from . import db, graph, kg, papers, trace
 from .budget import Budget
 from .config import settings
 from .agents import auditor, chamber, novelty, planner, research, toolbox, verdict, writer
@@ -101,6 +101,10 @@ async def run(pid: str) -> None:
                 db.cache_put(f"graph:{pid}:{len(db.papers(pid))}", await graph.build(pid))
             except Exception as e:
                 trace.error("Paper graph failed", str(e)[:300])
+            try:  # entity knowledge graph (methods, datasets, tasks, metrics), also a view
+                db.cache_put(f"kg:{pid}:{len(db.papers(pid))}", await kg.build(pid))
+            except Exception as e:
+                trace.error("Knowledge graph failed", str(e)[:300])
             totals = db.trace_totals(pid)
             db.update_project(pid, report=report, status="done", stage="done",
                               stats={"review": review, "budget": budget.snapshot(), "totals": totals})

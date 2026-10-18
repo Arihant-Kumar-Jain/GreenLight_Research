@@ -125,6 +125,14 @@ export type Evals = {
   calibration: Record<string, Gate & { measured_on: string; model: string; date: string; n_pos: number; n_neg: number; set?: string }>
 }
 
+export type KG = {
+  entities: { id: string; type: 'method' | 'dataset' | 'task' | 'metric'; name: string; papers: string[]; count: number }[]
+  matrix: { method: string; cells: Record<string, string[]> }[]; datasets: string[]
+  gaps: { method: string; dataset: string }[]
+  results: { paper: string; method: string; dataset: string; metric: string; value: string }[]
+  papers: number; dropped: number
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...init })
   if (!r.ok) {
@@ -158,6 +166,7 @@ export const api = {
   chatSend: (id: string, text: string) => post<{ messages: Message[]; busy: boolean }>(`/api/projects/${id}/chat`, { text }),
   scorePaper: (id: string, pid: string) => post<Paper>(`/api/projects/${id}/papers/${pid}/score`),
   graph: (id: string, refresh = false) => req<GraphData>(`/api/projects/${id}/graph${refresh ? '?refresh=1' : ''}`),
+  knowledge: (id: string, refresh = false) => req<KG>(`/api/projects/${id}/knowledge${refresh ? '?refresh=1' : ''}`),
   explain: (id: string, a: string, b: string, facts: string) => post<{ text: string }>(`/api/projects/${id}/graph/explain`, { a, b, facts }),
   evals: () => req<Evals>('/api/evals'),
   runEval: (pid: string, rebuild = false) => post<{ started: boolean }>(`/api/evals/retrieval/${pid}${rebuild ? '?rebuild=1' : ''}`),

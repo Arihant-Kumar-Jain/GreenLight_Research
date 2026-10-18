@@ -215,7 +215,22 @@ async def reply(pid: str, text: str) -> dict:
                             "why": {x["name"]: x["detail"] for x in c.get("components", [])}, "notes": c.get("notes")})
             return {"scores": out}
 
-        agent = Agent("Research Chat", SYSTEM, toolbox.research_tools(pid, "Research Chat") + [score_credibility],
+        @tool("Query the project's knowledge graph of entities extracted from the papers (grounded in their text): "
+              "most used methods/datasets/tasks/metrics, which papers use an entity, reported results, and "
+              "method×dataset gaps (combinations no collected paper evaluates).",
+              digest=lambda r: f"knowledge graph: {len((r or {}).get('entities', []))} entities" if isinstance(r, dict) else str(r)[:100])
+        async def knowledge_graph(entity_type: Annotated[str | None, Field(description="method|dataset|task|metric")] = None,
+                                  name: Annotated[str | None, Field(description="entity name to look up")] = None) -> dict:
+            from .. import kg as kgm
+            g = db.cache_get(f"kg:{pid}:{len(db.papers(pid))}") or await kgm.build(pid)
+            db.cache_put(f"kg:{pid}:{len(db.papers(pid))}", g)
+            ents = [e for e in g["entities"] if (not entity_type or e["type"] == entity_type)
+                    and (not name or kgm.key(name) in e["id"])]
+            return {"entities": ents[:25], "gaps": g["gaps"][:15] if not name else [],
+                    "results": [r for r in g["results"] if not name or kgm.key(name) in kgm.key(
+                        f"{r['method']} {r['dataset']} {r['metric']}")][:15]}
+
+        agent = Agent("Research Chat", SYSTEM, toolbox.research_tools(pid, "Research Chat") + [score_credibility, knowledge_graph],
                       role="reason", max_steps=8, budget=budget, context_tokens=settings.context_budget_tokens,
                       pinned=lambda: "\n\n".join(x for x in (_project_state(pid), _facts_text(pid)) if x),
                       max_tokens=4000, temperature=0.3)

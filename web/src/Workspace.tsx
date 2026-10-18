@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Share2, Sparkles, Square } from 'lucide-react'
+import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Network, Share2, Sparkles, Square } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Project, type TraceEvent } from './api'
 import { GoogleButton, useAuth, UserMenu } from './auth'
@@ -12,6 +12,7 @@ import NoveltyView from './views/NoveltyView'
 import PapersView, { PaperDrawer } from './views/PapersView'
 import ReportView from './views/ReportView'
 import GraphView from './views/GraphView'
+import KnowledgeView from './views/KnowledgeView'
 
 const PaperGalaxy = lazy(() => import('./three/PaperGalaxy'))
 
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'agents', label: 'Agents (live)', icon: Bot },
   { id: 'galaxy', label: 'Paper galaxy', icon: Orbit },
   { id: 'graph', label: 'Relationship graph', icon: Share2 },
+  { id: 'knowledge', label: 'Knowledge', icon: Network },
   { id: 'papers', label: 'Papers', icon: BookOpen },
   { id: 'novelty', label: 'Novelty matrix', icon: Grid3x3 },
   { id: 'chamber', label: 'Chamber', icon: Scale },
@@ -274,6 +276,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
             </div>
           )}
           {tab === 'graph' && <GraphView p={p} onOpen={setDrawer} />}
+          {tab === 'knowledge' && <KnowledgeView p={p} />}
           {tab === 'papers' && <PapersView p={p} onOpen={setDrawer} />}
           {tab === 'novelty' && <NoveltyView p={p} />}
           {tab === 'chamber' && <ChamberView p={p} />}
