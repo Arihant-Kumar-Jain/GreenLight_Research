@@ -37,12 +37,39 @@ def _ok(kind: str) -> bool:
     return time.time() - _failed.get(kind, 0) > 300
 
 
+# GPU auto-detection: the self-hosted reranker (e.g. Qwen3-Reranker-8B on our Nebius GPU via vLLM) is used only while
+# it answers; when it is down or unset, the chain silently falls back to NIM / local / Nemotron.
+_probe: dict[str, float | bool] = {"at": 0.0, "ok": False}
+
+
+async def probe_gpu() -> bool:
+    if not settings.rerank_url:
+        return False
+    if time.time() - float(_probe["at"]) < 60:
+        return bool(_probe["ok"])
+    from .sources.http import client
+    ok = False
+    try:
+        base = settings.rerank_url.rsplit("/", 1)[0]
+        for path in ("/health", "/v1/models", "/models"):
+            r = await client().get(base + path, timeout=2.5)
+            if r.status_code < 500:
+                ok = True
+                break
+    except Exception:
+        ok = False
+    if ok != _probe["ok"]:
+        trace.info("GPU reranker " + ("detected: using " + settings.rerank_model if ok else "not reachable: using fallback chain"))
+    _probe.update(at=time.time(), ok=ok)
+    return ok
+
+
 def available() -> list[str]:
     out = []
+    if settings.rerank_url and _probe["ok"]:
+        out.append("endpoint")
     if settings.nvidia_api_key or settings.nim_rerank_url:
         out.append("nim")
-    if settings.rerank_url:
-        out.append("endpoint")
     if _has_local():
         out.append("local")
     out.append("llm")
@@ -178,6 +205,7 @@ async def rerank(query: str, docs: list[str], *, prefer: str | None = None) -> t
     Local backends report "local:<model>", so gates and evals never mix two models' score scales."""
     if not docs:
         return [], "none"
+    await probe_gpu()
     order = chain()
     if prefer and (prefer in BACKENDS or prefer.startswith("local:")):
         order = [prefer] + [k for k in order if k != prefer]

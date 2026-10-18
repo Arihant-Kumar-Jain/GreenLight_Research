@@ -173,3 +173,14 @@ def test_kg_merge_key_and_vague_filter():
     from glr import kg
     assert kg.key("Mixture-of-Experts (MoE)") == kg.key("mixture of experts")
     assert kg.VAGUE.search("five benchmarks") and kg.VAGUE.search("existing benchmark") and not kg.VAGUE.search("MMLU")
+
+
+async def test_gpu_reranker_autodetect(monkeypatch):
+    from glr import rerank
+    from glr.config import settings
+    monkeypatch.setattr(settings, "rerank_url", "http://127.0.0.1:9/rerank")  # nothing listens: must fall back
+    rerank._probe.update(at=0.0, ok=False)
+    assert await rerank.probe_gpu() is False and "endpoint" not in rerank.available()
+    rerank._probe.update(at=__import__("time").time(), ok=True)  # pretend the GPU answered
+    assert rerank.available()[0] == "endpoint"
+    rerank._probe.update(at=0.0, ok=False)

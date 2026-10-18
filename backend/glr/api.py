@@ -55,6 +55,7 @@ def _project_or_404(pid: str, user: User) -> dict:
 @app.get("/api/health")
 async def health():
     out = {"missing_keys": missing_keys(), "llm_provider": llm.provider_label(),
+           "gpu_reranker": await rerank.probe_gpu(),
            "rerankers": {"chain": rerank.chain(), "calibrated": {k: v.get("threshold") for k, v in rerank.calibration().items()},
                          "local_model": rerank.default_local_model() if "local" in rerank.available() else None}, "query_expansion": settings.query_expansion,
            "tavily_key": bool(settings.tavily_api_key), "s2_key": bool(settings.s2_api_key),

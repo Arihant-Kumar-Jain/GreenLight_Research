@@ -74,7 +74,7 @@ No agent framework. `backend/glr/harness/` is a hand-written runtime every agent
 | **Shared blackboard** | `note` writes findings to a project notebook pinned into every agent's prompt |
 | **Chat memory** | pinned project state · long-term facts (Nano-extracted, de-duplicated) · token-budget rolling summary · episodic recall of similar earlier exchanges (Qwen3 embeddings) · in-turn compression |
 | **Self-correction** | chat + report sentences are citation-checked against the cited papers; chat answers with unsupported sentences are revised once and re-checked |
-| **Speaker panel** | 3 × Nemotron Ultra at temperature 0 with different lenses (overall / strict novelty / significance), majority vote; a split panel can't produce GREEN |
+| **Speaker panel** | 3 × Nemotron Ultra at temperature 0 with different lenses (overall / strict novelty / significance), majority vote; a split panel can't produce GREEN; peer-review scores (novelty, significance, soundness, feasibility, 1-10) averaged over the panel |
 | **Perspective scouts** | every run's round 1 includes "same mechanism, other field or modality" and "skeptical reviewer: is this incremental?" (enforced in code) |
 | **Trace** | every LLM call (provider, model, tokens, latency, cost), tool call, API call, spawn, compression and guardrail → live agent graph in the UI |
 
@@ -131,6 +131,27 @@ worse); anything still unsupported is marked ⚠️ in the answer.
 - **idea** edges: the Lead Researcher's relation (same idea / very close / related).
 - **clusters**: weighted label propagation, labelled by distinctive title words (no LLM).
 - Click a paper → who it cites, who cites it, what it resembles, each with an **Explain** button (Nemotron Nano, cached).
+
+## Knowledge graph of entities
+
+`kg.py` + Knowledge tab: Nemotron Nano extracts methods, datasets, tasks, metrics and headline results from the 30
+most relevant papers. An entity is kept only if its name appears in that paper's text, a result only if its number
+does, and vague dataset names ("five benchmarks") are dropped. Names merge by a normalised key ("Mixture-of-Experts
+(MoE)" = "mixture of experts"). Outputs: most-used entities, a **method × dataset coverage matrix whose empty cells
+are candidate experiments** ("no collected paper evaluates MoLE on MMLU / GSM8K" on the live project), and a results
+table. The research chat can query it with the `knowledge_graph` tool. Live: 119 entities from 30 papers, 29 results,
+44 ungrounded or vague names dropped.
+
+## Using our Nebius GPU (288 GB HBM3e) — auto-detected
+
+The app runs fine without it; when the GPU's servers answer, the big models are used automatically.
+- **Reranker (auto):** serve Qwen3-Reranker-8B with vLLM on the GPU and set `GLR_RERANK_URL=http://<gpu>:8001/rerank`.
+  `rerank.probe_gpu()` checks it every 60 s; while it answers it is first in the chain, otherwise the chain falls back
+  to NIM → local cross-encoder → Nemotron. `GET /api/health` shows `gpu_reranker: true/false`.
+- **Local cross-encoder (auto):** on a CUDA machine the default becomes bge-reranker-v2-m3 (568M) instead of MiniLM.
+- **LLMs (config switch):** Token Factory stays the default. To run Nemotron on the GPU instead, serve it with vLLM
+  (Super 120B in FP8 is ~130 GB and fits) and point `NEBIUS_BASE_URL` at the vLLM `/v1` endpoint; model roles resolve
+  from that server's `/models`. Automatic per-role failover between the GPU and Token Factory is not built yet.
 
 ## Verdict guardrails (code, after the Speaker)
 
@@ -209,7 +230,7 @@ bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default on
 | Chat answer before citation normalisation | wrote "(P66)" → 0 claims checked → fixed: normalised to [P66], all checkable |
 | Local reranker first load | ~160 s incl. 2.3 GB model download (bge-reranker-v2-m3), then cached |
 
-**Offline tests**: 33 passing (`make test`), incl. Sachit's auth / spend-cap guards: harness (parallel tools, loop detection, review gate, budget-forced
+**Offline tests**: 35 passing (`make test`), incl. Sachit's auth / spend-cap guards: harness (parallel tools, loop detection, review gate, budget-forced
 finish, tier-1/2 compression with tool-call pairing checked on every request, child budgets, chat memory layers),
 credibility, quote verification, citation normalisation, guardrails, strict title identity, graph citation matching
 + clustering, MMR, reranker fallback, gate calibration.
@@ -242,7 +263,7 @@ UI: landing (three.js idea-in-a-galaxy hero) → intake chat with quick replies 
 **Verdict** · **Agents (live)** (agent graph + trace) · **Paper galaxy** (3D, orbit = closeness, colour = credibility)
 · **Relationship graph** (3D force graph: citation links with the reference line as proof, embedding similarity,
 auto-clusters, "explain how these two relate")
-· **Papers** (credibility breakdowns, relevance, audits, links) · **Novelty matrix** (verified quotes, strict-judge
+· **Knowledge** (entities, method × dataset gaps, results) · **Papers** (credibility breakdowns, relevance, audits, links) · **Novelty matrix** (verified quotes, strict-judge
 downgrades) · **Chamber** (3D chamber + transcript) · **Report** (citation check, **Export .md**) · **Chat** (memory
 panel, self-correction) · **Notebook**. Header: traffic light, **Stop** / **Re-run**. **Proof** page (`#/proof`):
 retrieval eval table + gate calibration.
