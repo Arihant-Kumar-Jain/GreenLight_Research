@@ -11,8 +11,8 @@ from pydantic import BaseModel, Field
 
 from .. import db, llm, trace
 
-WINDOW_MAX = 24
-WINDOW_KEEP = 10
+HISTORY_TOKENS = 4000  # fold older intake turns once the verbatim chat exceeds this
+WINDOW_KEEP = 8
 
 
 class Question(BaseModel):
@@ -79,9 +79,10 @@ def _transcript(messages: list[dict]) -> str:
 
 
 async def _fold(pid: str, messages: list[dict]) -> dict:
+    from ..harness.context import tokens
     summary = load_memory(pid, "intake")
     cut = len(messages) - WINDOW_KEEP
-    if len(messages) <= WINDOW_MAX or cut <= summary["upto"]:
+    if sum(tokens(m["content"]) for m in messages[summary["upto"]:]) <= HISTORY_TOKENS or cut <= summary["upto"]:
         return summary
     res = await llm.chat("fast", [
         {"role": "system", "content": "Summarise this part of a research-idea interview as a compact list of facts "

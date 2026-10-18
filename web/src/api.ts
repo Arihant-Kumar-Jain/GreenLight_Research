@@ -90,6 +90,7 @@ export type Health = {
   missing_keys: string[]; llm_provider: string; tavily_key: boolean; s2_key: boolean
   budget_usd_per_run: number; research_rounds: number; max_scouts: number
   models?: Record<string, { id: string; name: string } | string>; models_error?: string
+  rerankers?: { chain: string[]; local_model: string | null }
 }
 
 export type GraphNode = {

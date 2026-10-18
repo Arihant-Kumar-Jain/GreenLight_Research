@@ -153,7 +153,9 @@ transcript) · **Report** (citation check) · **Chat** · **Notebook**.
    Nemotron Nano/Super/Ultra + Qwen3-Embedding-8B, `rerankers.chain` starts with `nim` (or `local`).
 3. Start one fresh run (~9 min) and keep it open: Agents (live) graph while it runs, then Verdict → Relationship graph
    → Novelty matrix → Chamber → Chat. **Stop** cancels a run; **Re-run** starts over.
-4. Not built: sign-in (don't expose publicly), Postgres/hosting, the "hard" retrieval eval set (`make eval P=<id>`).
+4. Run `make eval P=<project_id>` once: it writes `data/eval/calibration.json`, which switches on the
+   `sufficient_evidence` gate (until then the gate is off). Report tab → **Export .md** downloads the cited report.
+5. Not built: sign-in (don't expose publicly), Postgres/hosting, the "hard" retrieval eval set (`make eval P=<id>`).
 
 ## Layout
 

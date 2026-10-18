@@ -68,7 +68,7 @@ export default function Home() {
           <a href="#/proof" className="hover:text-ink">Proof</a>
           {health && (health.missing_keys.length
             ? <Badge tone="stop">Missing: {health.missing_keys.join(', ')}</Badge>
-            : <Badge tone="go">{health.llm_provider} · Tavily ready</Badge>)}
+            : <Badge tone="go">{health.llm_provider} · Tavily{health.rerankers?.chain[0] ? ` · rerank: ${health.rerankers.chain[0] === 'local' ? (health.rerankers.local_model ?? 'local').split('/').pop() : health.rerankers.chain[0]}` : ''}</Badge>)}
         </div>
       </nav>
 
