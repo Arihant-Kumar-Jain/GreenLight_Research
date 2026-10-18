@@ -5,6 +5,36 @@ For each change: what, why, new env vars, how to test, open TODOs.
 
 ---
 
+## 2026-10-18 (night) — Sachit (with Claude): light theme, landing page, 3D specimen
+
+**What.**
+- **Light theme across the app** ("ink on paper"): tokens in `index.css` (paper `#f6f8f7`, pine ink `#0e2a21`, green
+  `#0b7a47`, amber, red, teal for links/data). Colour only carries meaning: green = verified/trusted/open,
+  amber = partly done, red = done/retracted. Fonts: Newsreader (headlines), Atkinson Hyperlegible Next (UI/body),
+  JetBrains Mono for IDs/scores only. The all-caps tracked labels and the film grain are gone.
+- **Landing page** at `#/` (`Landing.tsx`). The app home moved to `#/app` (`Home.tsx`, rebuilt as a clean start page
+  with healthcare examples and a project list). The copy follows `docs/GreenLight_Research_Idea_Scope.pdf` only.
+  Nav: section links + **Sign in with Google** (Open app + avatar when signed in). **Start researching** opens the
+  Google sign-in popup when signed out, then goes to the app.
+- **3D specimen** (`three/Specimen.tsx`), after GreenLight's Journey: one fixed particle cloud that morphs as you
+  scroll, drawn as ink dots on paper. Shapes: DNA helix (question) → source sphere with scout orbits (discovery) → a
+  page with cited lines in green (ask the papers) → trust-score histogram with a red retracted bar (credibility) →
+  clustered citation network (graph) → traffic light (verdict). One draw call, no bloom, reduced motion respected.
+  It fades out behind the reference sections.
+- **Workspace 3D on light**: `three/core.ts` renders opaque on the white surface; bloom/lens only on request (bloom
+  washes colours out on white). Paper galaxy, relationship graph and Chamber use lit, light-palette materials with
+  normal blending; out-of-focus nodes/edges fade toward the paper. The glass core tints at the rim instead of glowing.
+  `Constellation.tsx` (old dark hero) was removed.
+
+**Test.** `make check`. Landing checked in the browser at every stage, plus the sign-in popup. Intake and the live
+agents view were checked on a real run. Paper galaxy, relationship graph and Chamber were converted but **not yet
+checked on a finished project** (open one and look).
+
+**Heads-up for the backend.** The landing page lists the scope's healthcare sources (PubMed, Europe PMC, medRxiv/bioRxiv,
+ClinicalTrials.gov, Cochrane, WHO/FDA/EMA). The scouts don't search those yet (arXiv, OpenAlex, HF Papers, Tavily).
+
+---
+
 ## 2026-10-18 (evening) — Sachit (with Claude): Google sign-in, spend caps, Nebius deploy files
 
 **What.**

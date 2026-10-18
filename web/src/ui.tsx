@@ -43,7 +43,7 @@ export function Button({ children, onClick, variant = 'primary', disabled, class
   className?: string; type?: 'button' | 'submit'; title?: string
 }) {
   const v = {
-    primary: 'bg-go text-[#05210f] hover:brightness-110',
+    primary: 'bg-go text-on-go hover:brightness-110',
     ghost: 'text-muted hover:text-ink hover:bg-sunken',
     outline: 'border border-line text-ink hover:bg-sunken',
   }[variant]

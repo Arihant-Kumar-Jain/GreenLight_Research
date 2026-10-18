@@ -1,42 +1,48 @@
-import { ArrowUp, BookOpenCheck, Bot, FlaskConical, GitBranch, Scale, ShieldCheck, Trash2 } from 'lucide-react'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { ArrowUp, Trash2 } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { go } from './App'
 import { api, type Health, type ProjectSummary } from './api'
 import { GoogleButton, useAuth, UserMenu } from './auth'
-import { Badge, Card, cx, LIGHT, timeAgo } from './ui'
-
-const Constellation = lazy(() => import('./three/Constellation'))
+import { Mark } from './Landing'
+import { Card, cx, LIGHT, timeAgo } from './ui'
 
 export function Logo() {
   return (
-    <a href="#/" className="flex items-center gap-2.5">
-      <svg viewBox="0 0 32 32" width="26" height="26"><rect x="9" y="2" width="14" height="28" rx="7" fill="#14201a" stroke="#2a3a31" /><circle cx="16" cy="9" r="3.2" fill="#444" /><circle cx="16" cy="16" r="3.2" fill="#444" /><circle cx="16" cy="23" r="3.6" fill="#3ee07f" /></svg>
-      <span className="font-display text-xl tracking-tight">GreenLight <span className="italic text-go">Research</span></span>
+    <a href="#/app" className="flex items-center gap-2.5">
+      <Mark />
+      <span className="font-display text-[20px] font-medium tracking-tight">GreenLight Research</span>
     </a>
   )
 }
 
-const FEATURES = [
-  { icon: Bot, title: 'Agent swarm', text: 'A Lead Researcher dispatches parallel Scouts over arXiv, OpenAlex, Hugging Face, the live web (Tavily) and the citation graph.' },
-  { icon: Scale, title: 'Research Chamber', text: 'A Proponent and a Skeptic debate your idea from evidence; Nemotron Ultra rules green / amber / red.' },
-  { icon: ShieldCheck, title: 'Credibility per paper', text: 'Citations, author h-index, venue, adoption and audited red flags → a transparent 0–100 score.' },
-  { icon: BookOpenCheck, title: 'Verified citations', text: 'Novelty overlaps must quote the paper; every report claim is checked against the cited text.' },
-  { icon: GitBranch, title: 'Context engineering', text: 'Tiered compression, a shared notebook, budgets and loop guards keep long agent runs sharp and cheap.' },
-  { icon: FlaskConical, title: 'Keep talking', text: 'Chat back and forth with the research agent: it remembers, searches more and re-scores as you go.' },
+/** Shared top bar for the app pages. */
+export function AppBar({ children }: { children?: ReactNode }) {
+  return (
+    <nav className="sticky top-0 z-20 flex h-16 items-center justify-between gap-4 border-b border-line bg-bg/90 px-5 backdrop-blur-md sm:px-6">
+      <Logo />
+      <div className="flex items-center gap-3">{children}<UserMenu /></div>
+    </nav>
+  )
+}
+
+const EXAMPLES = [
+  'Does early mobilisation after hip fracture surgery reduce delirium in patients over 80?',
+  'Detecting paroxysmal atrial fibrillation in primary care from a wearable ECG patch with a small transformer model',
+  'Low-dose colchicine to prevent atrial fibrillation after cardiac surgery',
 ]
 
 export default function Home() {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
   const [health, setHealth] = useState<Health | null>(null)
   const { user, needsSignIn } = useAuth()
   const [askSignIn, setAskSignIn] = useState(false)
 
   useEffect(() => { api.health().then(setHealth).catch(() => {}) }, [])
   useEffect(() => {
-    api.projects().then(setProjects).catch(() => {})
+    api.projects().then(setProjects).catch(() => setProjects([]))
     if (user) setAskSignIn(false)
   }, [user])
 
@@ -56,99 +62,94 @@ export default function Home() {
 
   async function remove(id: string) {
     await api.remove(id).catch(() => {})
-    setProjects((ps) => ps.filter((p) => p.id !== id))
+    setProjects((ps) => (ps ?? []).filter((p) => p.id !== id))
   }
 
   const models = health?.models
   const modelName = (r: string) => (models && typeof models[r] === 'object' ? (models[r] as { name: string }).name : null)
+  const status = health && (health.missing_keys.length
+    ? <span className="text-sm text-stop">Missing: {health.missing_keys.join(', ')}</span>
+    : <span className="hidden items-center gap-2 text-sm text-muted sm:flex"><span className="h-2 w-2 rounded-full bg-go" />{health.llm_provider} connected</span>)
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
-      <Suspense fallback={null}>
-        <Constellation className="pointer-events-none absolute inset-x-0 top-0 h-[980px] opacity-90 [mask-image:linear-gradient(to_bottom,black_55%,transparent)]" />
-      </Suspense>
-      <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <Logo />
-        <div className="flex items-center gap-2 text-xs text-muted">
-          {health && (health.missing_keys.length
-            ? <Badge tone="stop">Missing: {health.missing_keys.join(', ')}</Badge>
-            : <Badge tone="go">{health.llm_provider} · Tavily ready</Badge>)}
-          <UserMenu />
-        </div>
-      </nav>
+    <div className="min-h-screen">
+      <AppBar>{status}</AppBar>
 
-      <main className="relative z-10 mx-auto max-w-6xl px-6">
-        <section className="pb-10 pt-[300px] text-center md:pt-[340px]">
-          <div className="eyebrow mb-5">Deep research · NVIDIA Nemotron on Nebius</div>
-          <h1 className="mx-auto max-w-3xl font-display text-5xl leading-[1.05] tracking-tight md:text-6xl">
-            Has your research idea <span className="italic text-go">already been done?</span>
-          </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-muted">
-            Describe it. A swarm of agents reads the literature, scores every paper's credibility, maps your idea against
-            the closest work component by component, debates it, and tells you green, amber or red, with sources.
-          </p>
+      <main className="mx-auto max-w-3xl px-5 pb-24 pt-14 sm:px-6">
+        <h1 className="font-display text-[clamp(2.2rem,4.6vw,3.2rem)] font-normal leading-[1.08] tracking-[-0.015em]">What do you want to research?</h1>
+        <p className="mt-3 max-w-[36rem] text-[17px] text-muted">
+          Describe a question or an idea in a sentence or two. A short chat sharpens it, then the agents get to work.
+        </p>
 
-          <Card className="mx-auto mt-10 max-w-3xl border-go/20 bg-surface/80 p-2 text-left shadow-[0_0_80px_-30px_var(--go)] backdrop-blur-xl">
-            <textarea
-              value={text} onChange={(e) => setText(e.target.value)} rows={4}
-              onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit() }}
-              placeholder="e.g. Route each token to a mixture of LoRA adapters with a learned gate, to fine-tune one LLM for many tasks without interference…"
-              className="w-full resize-none bg-transparent px-4 py-3 text-[15px] outline-none placeholder:text-muted/60"
-            />
-            <div className="flex items-center justify-between px-3 pb-2">
-              <span className="text-xs text-muted">Personal data is redacted before anything leaves your machine. ⌘↵ to send</span>
-              <button onClick={submit} disabled={busy || text.trim().length < 10}
-                className="grid h-9 w-9 place-items-center rounded-xl bg-go text-[#05210f] transition disabled:opacity-30">
-                <ArrowUp size={18} />
-              </button>
-            </div>
-          </Card>
-          {err && <p className="mt-3 text-sm text-stop">{err}</p>}
-          {askSignIn && needsSignIn && (
-            <div className="mt-4 flex flex-col items-center gap-2 text-sm text-muted">
-              Sign in to start research. Your ideas and results stay private to your account.
-              <GoogleButton />
-            </div>
-          )}
-          {models && (
-            <p className="mt-4 text-xs text-muted">
-              Models: {['fast', 'reason', 'judge', 'embed'].map((r) => modelName(r)).filter(Boolean).join(' · ')}
-            </p>
-          )}
-        </section>
-
-        {projects.length > 0 && (
-          <section className="pb-14">
-            <h3 className="eyebrow mb-4">Your research</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              {projects.map((p) => (
-                <Card key={p.id} className="group flex items-start gap-3 p-4 transition hover:border-go/40">
-                  <span className={cx('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', p.light ? LIGHT[p.light].bg : 'bg-line',
-                    (p.status === 'running' || p.status === 'queued') && 'animate-glow bg-info')} />
-                  <a href={p.status === 'draft' ? `#/p/${p.id}/intake` : `#/p/${p.id}`} className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{p.title || p.idea_text.slice(0, 80)}</div>
-                    <div className="mt-1 text-xs text-muted">
-                      {p.status === 'draft' ? 'Intake in progress' : p.status === 'done' && p.light ? LIGHT[p.light].call : p.status}
-                      {' · '}{timeAgo(p.updated_at)}
-                    </div>
-                  </a>
-                  <button onClick={() => remove(p.id)} className="text-muted opacity-0 transition hover:text-stop group-hover:opacity-100" title="Delete">
-                    <Trash2 size={15} />
-                  </button>
-                </Card>
-              ))}
-            </div>
-          </section>
+        <Card className="mt-8 p-2 shadow-[0_1px_2px_rgba(14,42,33,.06),0_8px_24px_-12px_rgba(14,42,33,.12)] focus-within:border-ink/30">
+          <label htmlFor="idea" className="sr-only">Research question or idea</label>
+          <textarea
+            id="idea" value={text} onChange={(e) => setText(e.target.value)} rows={4}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit() }}
+            placeholder="e.g. Does vitamin D supplementation reduce exacerbations in adults with asthma who are deficient?"
+            className="w-full resize-none bg-transparent px-4 py-3 text-[16px] outline-none placeholder:text-muted/70"
+          />
+          <div className="flex items-center justify-between gap-3 px-3 pb-2">
+            <span className="text-[13px] text-muted">Personal data is redacted before anything leaves your machine. Ctrl+Enter to send.</span>
+            <button onClick={submit} disabled={busy || text.trim().length < 10}
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-go px-4 text-[15px] font-semibold text-on-go transition hover:bg-ink disabled:opacity-35">
+              Start <ArrowUp size={16} />
+            </button>
+          </div>
+        </Card>
+        {err && <p className="mt-3 text-sm text-stop">{err}</p>}
+        {askSignIn && needsSignIn && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-[15px]">
+            Sign in to start research. Your questions and results stay private to your account.
+            <GoogleButton />
+          </div>
         )}
 
-        <section className="grid gap-4 pb-20 md:grid-cols-3">
-          {FEATURES.map((f) => (
-            <Card key={f.title} className="bg-surface/70 p-5 backdrop-blur-md">
-              <f.icon size={18} className="text-go" />
-              <div className="mt-3 font-semibold">{f.title}</div>
-              <p className="mt-1.5 text-sm leading-relaxed text-muted">{f.text}</p>
-            </Card>
-          ))}
+        <div className="mt-6">
+          <div className="text-[14px] font-semibold text-muted">Try an example</div>
+          <div className="mt-2 flex flex-col gap-2">
+            {EXAMPLES.map((ex) => (
+              <button key={ex} onClick={() => setText(ex)}
+                className="rounded-xl border border-line bg-surface px-4 py-2.5 text-left text-[15px] transition hover:border-ink/30">
+                {ex}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {models && (
+          <p className="mt-6 text-[13px] text-muted">
+            Models: {['fast', 'reason', 'judge', 'embed'].map((r) => modelName(r)).filter(Boolean).join(', ')}
+          </p>
+        )}
+
+        <section className="mt-14">
+          <h2 className="font-display text-2xl">Your research</h2>
+          {projects === null ? null : projects.length === 0 ? (
+            <p className="mt-3 text-[15px] text-muted">
+              {needsSignIn ? 'Sign in to see your research.' : 'Nothing yet. Start with a question above; your projects will be listed here.'}
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-line border-y border-line">
+              {projects.map((p) => (
+                <li key={p.id} className="group flex items-center gap-4 py-3.5">
+                  <span className={cx('h-2.5 w-2.5 shrink-0 rounded-full', p.light ? LIGHT[p.light].bg : 'bg-line',
+                    (p.status === 'running' || p.status === 'queued') && 'animate-glow bg-info')} />
+                  <a href={p.status === 'draft' ? `#/p/${p.id}/intake` : `#/p/${p.id}`} className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{p.title || p.idea_text.slice(0, 90)}</div>
+                    <div className="mt-0.5 text-[13.5px] text-muted">
+                      {p.status === 'draft' ? 'Intake in progress' : p.status === 'done' && p.light ? LIGHT[p.light].call : p.status}
+                      {', '}{timeAgo(p.updated_at)}
+                    </div>
+                  </a>
+                  <button onClick={() => remove(p.id)} aria-label={`Delete ${p.title || 'project'}`}
+                    className="rounded-lg p-2 text-muted opacity-60 transition hover:bg-stop-soft hover:text-stop group-hover:opacity-100 focus-visible:opacity-100">
+                    <Trash2 size={16} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </main>
     </div>

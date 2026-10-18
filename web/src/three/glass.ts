@@ -79,11 +79,11 @@ void main(){
   vec3 L2 = normalize(vec3(0.7, -0.2, 0.5));
   float spec = pow(max(dot(reflect(-L1, N), V), 0.0), 90.0) * 1.8 + pow(max(dot(reflect(-L2, N), V), 0.0), 40.0) * 0.35;
   vec3 irid = 0.5 + 0.5 * cos(6.2831 * (fres * 1.4 + uTime * 0.05 + vec3(0.0, 0.33, 0.67)));
-  vec3 col = refr * mix(vec3(1.0), uTint, 0.1) * 1.08;
-  col += mix(vec3(0.85, 1.0, 0.92), uTint, 0.55) * fres * (0.38 + uGlow * 0.5);
-  col += irid * fres * 0.18;
-  col += spec;
-  col += uTint * 0.025 * uGlow;
+  // Light surface: the lens tints and darkens at the rim instead of glowing (added light vanishes on white).
+  vec3 col = refr * mix(vec3(1.0), uTint, 0.16);
+  col = mix(col, uTint * 0.7, fres * (0.45 + uGlow * 0.3));
+  col += irid * fres * 0.06;
+  col += spec * 0.9;
   gl_FragColor = vec4(col, 1.0);
 }`
 

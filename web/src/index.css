@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Instrument Serif", Georgia, serif;
+  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Newsreader", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -18,65 +18,40 @@
   --color-stop-soft: var(--stop-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-on-go: var(--on-go);
 }
 
-/* Dark-first: Greenlight is a signal in the dark. */
+/* Ink on paper. Colour carries meaning only: green = verified / trusted / open, amber = partly done, red = done or retracted. */
 :root {
-  --bg: #070b09;
-  --surface: #0d1311;
-  --sunken: #0a100d;
-  --ink: #edf3ee;
-  --muted: #8b9a92;
-  --line: #1c2622;
-  --go: #3ee07f;
-  --go-soft: #0f2a1b;
-  --wait: #f5b841;
-  --wait-soft: #2e230b;
-  --stop: #ff5d5d;
-  --stop-soft: #331314;
-  --info: #8ea6ff;
-  --info-soft: #161d3a;
-  color-scheme: dark;
-}
-
-:root[data-theme="light"] {
-  --bg: #f6f6f1;
+  --bg: #f6f8f7;
   --surface: #ffffff;
-  --sunken: #efefe8;
-  --ink: #15201a;
-  --muted: #5d6a62;
-  --line: #e2e4dc;
-  --go: #15803d;
-  --go-soft: #dcf3e3;
-  --wait: #b45309;
-  --wait-soft: #fbecd3;
-  --stop: #c02626;
-  --stop-soft: #fbe0e0;
-  --info: #3b5bdb;
-  --info-soft: #e3e8fd;
+  --sunken: #eef2f0;
+  --ink: #0e2a21;
+  --muted: #52645c;
+  --line: #d9e2dd;
+  --go: #0b7a47;
+  --go-soft: #ddf1e6;
+  --on-go: #ffffff;
+  --wait: #a85f00;
+  --wait-soft: #fbefd9;
+  --stop: #b42318;
+  --stop-soft: #fbe4e1;
+  --info: #155e75;
+  --info-soft: #e0eff4;
   color-scheme: light;
 }
 
 html, body { background: var(--bg); color: var(--ink); }
-body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-::selection { background: color-mix(in srgb, var(--go) 35%, transparent); }
+body { font-family: var(--font-sans); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: color-mix(in srgb, var(--go) 22%, transparent); }
+:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; border-radius: 6px; }
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
 
-/* Film grain over everything: keeps large dark areas from looking flat. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  pointer-events: none;
-  opacity: 0.05;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
+/* Small section label: sentence case, quiet. */
 .eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--muted);
 }
 

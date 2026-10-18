@@ -98,7 +98,7 @@ export function GoogleButton({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!gisReady || !ref.current || !window.google) return
-    window.google.accounts.id.renderButton(ref.current, { theme: 'filled_black', size: 'medium', shape: 'pill', text: 'signin_with', locale: 'en' })
+    window.google.accounts.id.renderButton(ref.current, { theme: 'outline', size: 'large', shape: 'pill', text: 'signin_with', locale: 'en' })
   }, [gisReady])
   if (info?.mode === 'off') return <span className="text-xs text-muted">Sign-in not configured</span>
   return (

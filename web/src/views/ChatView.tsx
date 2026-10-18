@@ -92,7 +92,7 @@ export default function ChatView({ p, events, onBusy }: { p: Project; events: Tr
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text) } }}
           placeholder={p.status === 'done' ? 'Ask a follow-up, challenge the verdict, or change the idea…' : 'You can chat while the research runs…'}
           className="flex-1 resize-none rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-go/50" />
-        <button onClick={() => send(text)} disabled={!text.trim() || busy} className="grid h-11 w-11 place-items-center rounded-xl bg-go text-[#05210f] disabled:opacity-30"><ArrowUp size={18} /></button>
+        <button onClick={() => send(text)} disabled={!text.trim() || busy} className="grid h-11 w-11 place-items-center rounded-xl bg-go text-on-go disabled:opacity-30"><ArrowUp size={18} /></button>
       </div>
       {err && <p className="mt-2 text-sm text-stop">{err}</p>}
     </div>

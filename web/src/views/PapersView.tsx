@@ -26,7 +26,7 @@ export function PaperDrawer({ paper: p, projectId, onClose, onUpdate }: { paper:
   const [busy, setBusy] = useState(false)
   const c = p.credibility
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30" onClick={onClose}>
       <aside onClick={(e) => e.stopPropagation()} className="animate-rise scroll-thin h-full w-full max-w-xl overflow-y-auto border-l border-line bg-surface p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

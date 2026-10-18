@@ -69,7 +69,7 @@ export default function GraphView({ p, onOpen }: { p: Project; onOpen: (id: stri
       <div>
         <Suspense fallback={<div className="h-[74vh]" />}>
           <PaperGraph data={g} colorBy={colorBy} show={show} selected={selected} cluster={cluster} onSelect={(id) => { setSelected(id); if (id) setCluster(null) }}
-            className="h-[74vh] min-h-[560px] overflow-hidden rounded-3xl border border-line bg-[radial-gradient(ellipse_at_center,#0d1712_0%,#050806_70%)]" />
+            className="h-[74vh] min-h-[560px] overflow-hidden rounded-3xl border border-line bg-surface" />
         </Suspense>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
           {(['cites', 'similar', 'idea'] as EdgeKind[]).map((k) => (

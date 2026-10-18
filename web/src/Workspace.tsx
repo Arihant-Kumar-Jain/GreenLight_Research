@@ -246,7 +246,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
             <div>
               <Suspense fallback={<div className="h-[72vh]" />}>
                 <PaperGalaxy papers={p.papers} closest={p.stats?.review?.closest ?? []} light={v?.light ?? null} onOpen={setDrawer}
-                  className="h-[72vh] min-h-[520px] overflow-hidden rounded-3xl border border-line bg-[radial-gradient(ellipse_at_center,#0d1712_0%,#050806_70%)]" />
+                  className="h-[72vh] min-h-[520px] overflow-hidden rounded-3xl border border-line bg-surface" />
               </Suspense>
               <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted">
                 <span>Orbit = closeness to your idea (inner: same idea → very close → related → background → unranked)</span>
