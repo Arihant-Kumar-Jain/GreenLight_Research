@@ -5,6 +5,7 @@
   - Any core component fully covered by credible verified prior work → capped at AMBER.
   - Thin evidence (few papers found, or the review's confidence is low) → capped at AMBER: never a green on a
     search that could have missed the prior work.
+  - A split Speaker panel (3 independent rulings) can't produce GREEN: green needs a unanimous panel.
   - The Lead Researcher's own coverage map says every core component is already covered and it found "same idea" /
     "very close" papers → at least AMBER. (A Nebius run went GREEN because the novelty matrix's strict judge
     downgraded every overlap while the review itself said the core was covered.)
@@ -44,6 +45,9 @@ def apply(pid: str, ruling: dict, novelty: dict, lead: dict) -> dict:
                                                      if x["overlap"] == "full"):
             at_least("amber", f"Core component {c['id']} ('{c['text'][:80]}') is already done by credible prior work.")
             break
+    votes = ruling.get("votes") or []
+    if light == "green" and votes and votes.count("green") < len(votes):
+        at_least("amber", f"The Speaker panel was split ({', '.join(votes)}): a green needs a unanimous panel.")
     core = [c["id"] for c in novelty.get("components", []) if c.get("core")] or \
         [c["id"] for c in novelty.get("components", [])]
     cov = {c["component"]: c["status"] for c in lead.get("coverage", [])}

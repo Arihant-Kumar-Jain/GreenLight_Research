@@ -192,13 +192,27 @@ async def hold(pid: str, motion: str, pack: dict, on_update=None) -> dict:
     d["status"] = "adjudication"
     if on_update:
         on_update(d)
+    user = f"Motion: {motion}\n\nEvidence pack:\n{pack_txt}\n\nDebate transcript:\n{_transcript(d)}"
+
+    async def one(i: int):
+        with trace.scope(agent=f"Speaker {i + 1}"):
+            # vote 1 deterministic; votes 2-3 sampled, so the panel shows how robust the call is
+            return await llm.chat_json("judge", SPEAKER, user, Ruling, title=f"Speaker {i + 1}/3: adjudicate and rule",
+                                       max_tokens=6000, temperature=0.0 if i == 0 else 0.6)
+    rulings = [x.model_dump() for x in await asyncio.gather(*(one(i) for i in range(3)), return_exceptions=True)
+               if not isinstance(x, BaseException)]
+    if not rulings:
+        raise RuntimeError("All Speakers failed")
+    votes = [x["light"] for x in rulings]
+    order = {"green": 0, "amber": 1, "red": 2}
+    # majority; with three different votes take the middle one (amber)
+    majority = max(set(votes), key=lambda c: (votes.count(c), -abs(order[c] - 1)))
+    r = next(x for x in rulings if x["light"] == majority)
+    r["votes"] = votes
+    r["confidence"] = round(r.get("confidence", 0.5) * votes.count(majority) / len(votes), 3)
     with trace.scope(agent="Speaker"):
-        ruling = await llm.chat_json("judge", SPEAKER, f"Motion: {motion}\n\nEvidence pack:\n{pack_txt}\n\n"
-                                     f"Debate transcript:\n{_transcript(d)}", Ruling,
-                                     title="Speaker: adjudicate and rule", max_tokens=6000,
-                                     temperature=0.0)
-        r = ruling.model_dump()
-        trace.info(f"Speaker rules {r['light'].upper()}: {r['headline']}", r["deciding_factor"])
+        trace.info(f"Speaker panel {votes.count(majority)}/{len(votes)} {majority.upper()} (votes: {', '.join(votes)}): "
+                   f"{r['headline']}", r["deciding_factor"])
     d["ruling"] = r
     d["status"] = "done"
     return d

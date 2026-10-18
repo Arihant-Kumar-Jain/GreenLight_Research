@@ -225,7 +225,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
             ) : (
               <p className="mt-3 text-muted">{p.status === 'error' ? `Failed: ${p.error}` : p.running ? 'The agents are researching. Watch them in Agents (live).' : 'Not started.'}</p>
             )}
-            {v && <div className="mt-2 text-sm text-muted">Speaker confidence {Math.round((v.confidence ?? 0) * 100)}% · {p.papers.length} papers · novelty {p.novelty?.score ?? '–'}/100</div>}
+            {v && <div className="mt-2 text-sm text-muted">{v.votes?.length ? `Speaker panel ${v.votes.filter((x) => x === v.speaker_light).length}/${v.votes.length} · ` : ''}confidence {Math.round((v.confidence ?? 0) * 100)}% · {p.papers.length} papers · novelty {p.novelty?.score ?? '–'}/100</div>}
           </div>
         </header>
         <div className="sticky top-0 z-20 mt-6 border-b border-line bg-bg/90 backdrop-blur">

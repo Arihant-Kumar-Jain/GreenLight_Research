@@ -145,3 +145,19 @@ def test_guardrail_review_coverage_blocks_green():
     assert v["light"] == "amber" and "every core component" in v["headline"]
     lead["coverage"][1]["status"] = "open"
     assert verdict.apply(pid, {"light": "green", "headline": "Go", "reasons": []}, nov, lead)["light"] == "green"
+
+
+def test_split_speaker_panel_blocks_green():
+    pid = db.create_project("idea4")
+    for i in range(12):
+        db.add_paper(pid, f"k{i}", {"title": f"t{i}", "credibility": {"score": 60}})
+    ruling = {"light": "green", "headline": "Go", "reasons": [], "votes": ["green", "green", "amber"]}
+    v = verdict.apply(pid, ruling, {"already_done_by": [], "components": []}, {"confidence": "high"})
+    assert v["light"] == "amber" and "split" in v["headline"]
+    ruling["votes"] = ["green"] * 3
+    assert verdict.apply(pid, ruling, {"already_done_by": [], "components": []}, {"confidence": "high"})["light"] == "green"
+
+
+def test_table_rows_are_not_claims():
+    assert claims("| [P1] Paper | 2024 | 50 | ✓ done |\nReal claim about methods here [P2].") == \
+        [{"text": "Real claim about methods here [P2].", "refs": ["P2"]}]

@@ -74,6 +74,8 @@ Judge only against the passages, not your own knowledge. Be strict about numbers
 def claims(markdown: str) -> list[dict]:
     out = []
     for para in markdown.split("\n"):
+        if para.lstrip().startswith("|"):  # table rows (comparison table) are matrix data, not prose claims
+            continue
         for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z(])", para):
             refs = []
             for m in CITE_RE.finditer(sent):

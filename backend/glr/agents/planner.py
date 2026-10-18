@@ -41,6 +41,21 @@ async def plan(brief: dict) -> Plan:
         p = await llm.chat_json("reason", SYSTEM, brief_text(brief), Plan, title="Plan the research", max_tokens=4000)
         for i, c in enumerate(p.components, start=1):
             c.id = f"C{i}"
+        core = "; ".join(c.text for c in p.components if c.core) or p.summary
+        # Perspective angles (STORM-style), always present: prior art is most often missed in another field or
+        # under another name (a run once missed MoLoRA/LLaVA-MoLE this way).
+        p.angles = p.angles[:4] + [
+            Angle(title="Same mechanism, other field or modality",
+                  instructions="Find work that uses the same core mechanism in a different modality, domain or task "
+                               "(e.g. vision, speech, multimodal, RL), possibly under another name. Walk citation_graph "
+                               f"from the closest hits. Core mechanism: {core}",
+                  seed_queries=[w for w in (p.summary[:80], core[:80]) if w]),
+            Angle(title="Reviewer: is this incremental?",
+                  instructions="Act as a skeptical reviewer: find the papers a reviewer would cite to argue the idea is "
+                               "incremental or already done (surveys, benchmarks of the technique, strongest baselines, "
+                               "very recent preprints). Prefer recent work.",
+                  seed_queries=[f"survey {p.summary[:60]}", f"benchmark {core[:60]}"]),
+        ]
         trace.info(f"Plan: {len(p.components)} components, {len(p.angles)} search angles",
                    "\n".join([f"{c.id}{'*' if c.core else ''} {c.text}" for c in p.components]
                              + [f"→ {a.title}: {', '.join(a.seed_queries)}" for a in p.angles]))

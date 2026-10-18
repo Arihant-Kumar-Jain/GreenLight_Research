@@ -72,6 +72,29 @@ def _material(pid: str, brief: dict, lead: dict, novelty: dict, verdict: dict) -
             + f"\n\nNOTEBOOK\n{notes}\n\nPAPERS\n" + "\n".join(lines))
 
 
+SYMBOL = {"full": "✓ done", "partial": "◐ partly", "none": "✗ open", "unverified": "? unverified"}
+
+
+def comparison_table(pid: str, novelty: dict) -> str:
+    """Components × closest papers, straight from the quote-verified novelty matrix (no LLM)."""
+    comps = novelty.get("components") or []
+    rows = novelty.get("papers") or []
+    if not comps or not rows:
+        return ""
+    head = "| Paper | Year | Credibility | " + " | ".join(f"{c['id']}{'*' if c['core'] else ''}" for c in comps) + " |"
+    sep = "|" + "---|" * (3 + len(comps))
+    lines = [head, sep]
+    for r in rows:
+        p = db.paper(pid, r["paper_id"]) or {}
+        cells = {x["component"]: SYMBOL.get(x["overlap"], x["overlap"]) for x in r["cells"]}
+        cred = (p.get("credibility") or {}).get("score")
+        lines.append(f"| [{r['paper_id']}] {(p.get('title') or '')[:60]} | {p.get('year') or ''} | "
+                     f"{cred if cred is not None else '–'} | " + " | ".join(cells.get(c["id"], "") for c in comps) + " |")
+    legend = "; ".join(f"{c['id']}{'*' if c['core'] else ''} = {c['text']}" for c in comps)
+    return ("## Comparison with the closest work\n\n" + "\n".join(lines) + "\n\n" +
+            f"*{legend}. \\* = core. Every ✓/◐ is backed by a quote found in the paper.*\n")
+
+
 async def write(pid: str, brief: dict, lead: dict, novelty: dict, verdict: dict) -> dict:
     with trace.scope(agent="Report Writer"):
         r = await llm.chat_json("reason", SYSTEM, _material(pid, brief, lead, novelty, verdict)[:60000], Report,
@@ -80,6 +103,11 @@ async def write(pid: str, brief: dict, lead: dict, novelty: dict, verdict: dict)
         known = {p["id"] for p in db.papers(pid)}
         out["markdown"] = bracket_citations(out["markdown"], known)
         out["tldr"] = bracket_citations(out["tldr"], known)
+        table = comparison_table(pid, novelty)
+        if table:  # insert before "Recommended next steps" if present, else append
+            md = out["markdown"]
+            i = md.find("## Recommended next steps")
+            out["markdown"] = (md[:i] + table + "\n" + md[i:]) if i >= 0 else (md + "\n\n" + table)
     with trace.scope(agent="Citation Checker"):
         check = await verify.check_claims(pid, out["markdown"])
     flagged = {c["text"] for c in check["claims"] if c["label"] == "unsupported"}

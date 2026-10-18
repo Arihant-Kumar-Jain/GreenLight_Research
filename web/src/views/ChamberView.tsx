@@ -72,7 +72,7 @@ export default function ChamberView({ p }: { p: Project }) {
       </div>
       {v && (
         <Card className="p-6">
-          <SectionTitle>The Speaker rules (Nemotron Ultra)</SectionTitle>
+          <SectionTitle right={v.votes?.length ? <span className="flex items-center gap-1.5 text-xs text-muted">panel {v.votes.map((x, i) => <Badge key={i} tone={x === 'green' ? 'go' : x === 'amber' ? 'wait' : 'stop'}>{x}</Badge>)}</span> : undefined}>The Speaker panel rules (3 × Nemotron Ultra, majority)</SectionTitle>
           <div className="space-y-3">
             {v.clashes.map((c, i) => (
               <div key={i} className="flex items-start gap-3 text-sm">

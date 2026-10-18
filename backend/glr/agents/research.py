@@ -180,7 +180,8 @@ async def run(pid: str, brief: dict, plan: Plan, budget: Budget) -> dict:
                  pinned=lambda: toolbox.notebook_text(pid, 30), review=review,
                  max_reviews=max(0, settings.max_research_rounds - 1), max_tokens=6000)
     angles = "\n".join(f"- {a.title}: {a.instructions} (seed queries: {', '.join(a.seed_queries)})" for a in plan.angles)
-    task = (f"{idea_txt}\n\nPlanned search angles:\n{angles}\n\n"
+    task = (f"{idea_txt}\n\nPlanned search angles:\n{angles}\n\nRound 1 MUST include the two perspective angles "
+            f"('Same mechanism, other field or modality' and 'Reviewer: is this incremental?').\n\n"
             f"Known work to locate first: {', '.join(plan.known_work_to_locate) or 'none'}")
     res = await lead.run(task)
     out = res.output or {"synthesis": res.text, "closest": [], "coverage": [], "gaps": [], "confidence": "low"}
