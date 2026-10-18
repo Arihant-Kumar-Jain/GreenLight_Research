@@ -2,8 +2,7 @@
 
 For each of the closest papers (in parallel), Nemotron Super maps every idea component to none / partial / full
 overlap and must quote the paper. Quotes are verified against the paper text; a "partial" or "full" without a
-verified quote is downgraded to "unverified" and does not count (market-claims rule from Greenlight, applied to
-papers). The novelty score and "already done by" list are computed deterministically from verified cells.
+verified quote is downgraded to "unverified" and does not count (claims about papers need the paper's own words). The novelty score and "already done by" list are computed deterministically from verified cells.
 """
 
 import asyncio

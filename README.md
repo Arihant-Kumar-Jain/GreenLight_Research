@@ -72,7 +72,7 @@ Run 2 said **green**. Comparing it with run 1 showed why, and each finding becam
 | Only 50 papers overlapped with run 1 (97 vs 180); the Critic approved round 1, so MoLoRA, the closest paper, was never found | **A second research round is mandatory.** The Critic rejects round 1 until round 2 has run |
 | A strict judge downgraded all 19 "already done" overlaps to "partly", so novelty jumped from 0 to 50 | **The strict judge is mechanism-aware:** it only downgrades *setting* components (data, benchmarks); a mechanism used in another field still counts as done |
 | The Lead's own review said every core component was covered, yet nothing stopped the green | **New guardrail:** if the review finds every core component covered and very close papers exist, the verdict is at least amber |
-| LLaVA-MoLE does the same routing in a vision-language model and was easy to miss | **Two perspective scouts in every first round**, enforced in code: "same mechanism, other field or modality" and "skeptical reviewer: is this incremental?" (idea from STORM, see [our survey](docs/research/deep_research_landscape.md)) |
+| LLaVA-MoLE does the same routing in a vision-language model and was easy to miss | **Two perspective scouts in every first round**, enforced in code: "same mechanism, other field or modality" and "skeptical reviewer: is this incremental?" |
 
 ![Papers per run](docs/benchmarks/04_papers_and_rounds.png)
 ![Novelty per run](docs/benchmarks/05_novelty_per_run.png)
@@ -320,10 +320,7 @@ backend/glr/
   auth.py budget.py trace.py db.py privacy.py pipeline.py api.py
 backend/tests/   offline tests      backend/scripts/   retrieval eval
 web/src/         React 19 + Tailwind 4 + three.js (landing, app, workspace views, 3D scenes)
-deploy/          Nebius deploy guide, Caddy, backups      docs/   changelog, survey, benchmark charts
+deploy/          Nebius deploy guide, Caddy, backups      docs/   benchmark charts
 ```
 
-Built on lessons from [researchAgent](https://github.com/Sachitbansal/researchAgent) (hand-written agent loop, evidence
-gate, arXiv rate limits) and GreenLight (provider plug-in, debate and guardrails, privacy), and a survey of 22
-open-source deep-research systems ([`docs/research/deep_research_landscape.md`](docs/research/deep_research_landscape.md)).
 Not legal or career advice: check the sources before relying on a verdict.

@@ -68,7 +68,7 @@ p { text-wrap: pretty; }
 
 @keyframes grow { from { width: 0 } to { width: 100% } }
 
-/* Traffic light verdict (TrafficLight.tsx, from Greenlight) */
+/* Traffic light verdict (TrafficLight.tsx) */
 @keyframes tl-cycle { 0% { opacity: 0; } 6%, 30% { opacity: 1; } 38%, 100% { opacity: 0; } }
 @keyframes tl-breathe { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.9; } }
 @keyframes tl-flash { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(2.4); } }

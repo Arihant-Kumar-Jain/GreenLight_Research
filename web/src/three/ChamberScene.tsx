@@ -1,5 +1,5 @@
 /**
- * The Research Chamber, abstracted (ported from Greenlight): two curved tiers of particle "benches" (Proponent in green, Skeptic in red)
+ * The Research Chamber, abstracted: two curved tiers of particle "benches" (Proponent in green, Skeptic in red)
  * face each other across an aisle; the Speaker is an ink orb at the far end. Arguments fly from the
  * benches to the Speaker as comets. Some are struck mid-flight (no evidence) and fade to grey.
  * Drawn for the light theme: ink on a white surface, no bloom.

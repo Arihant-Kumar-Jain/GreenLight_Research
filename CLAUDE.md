@@ -6,12 +6,8 @@ deterministic credibility score → quote-verified novelty matrix → Proponent 
 rules green / amber / red, guardrailed in code → cited report with a citation check → ongoing research chat.
 
 Hackathon: NVIDIA × Nebius (open models only). Sponsors to show: Nemotron on Nebius Token Factory, Tavily, Qwen/HF.
-Sibling project: `../GreenLight` (startup ideas). **Do not edit GreenLight from here.**
 
-- Full feature/architecture docs: `README.md`. **Team change log: `docs/CHANGES.md`** (imported below) — add an entry
-  for every meaningful change: what, why, new env vars, how to test, open TODOs.
-
-@docs/CHANGES.md
+- Full feature/architecture docs and the benchmarks behind each design decision: `README.md`.
 
 ## Commands
 
@@ -31,7 +27,7 @@ Strongly recommended: `OPENALEX_API_KEY` (keyless OpenAlex shares a tiny per-IP 
   All agents use it; don't add a second loop.
 - `budget.py` + `trace.py`: budgets ride a contextvar and are charged by `trace.log` (llm → USD + call, tool → call).
   `trace.source()` is for external API calls (not charged). Agent scope sets parent → the UI's agent graph.
-- `llm.py`/`providers.py` ported from GreenLight; roles fast=Nano, reason=Super, judge=Ultra, embed=Qwen3-8B.
+- `llm.py`/`providers.py`: provider plug-in; roles fast=Nano, reason=Super, judge=Ultra, embed=Qwen3-8B.
   `llm.FAKE` / `llm.EMBED_FAKE` are the offline test seams.
 - `papers.py` merges records from all sources into stable ids `P#` per project; `corpus.py` is hybrid BM25 + dense RRF.
 - `sources/http.py` is the only HTTP seam for scholarly APIs (per-host pacing, 429 cooldown, cache). Use it.

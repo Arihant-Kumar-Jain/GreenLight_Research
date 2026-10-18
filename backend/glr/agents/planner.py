@@ -42,7 +42,7 @@ async def plan(brief: dict) -> Plan:
         for i, c in enumerate(p.components, start=1):
             c.id = f"C{i}"
         core = "; ".join(c.text for c in p.components if c.core) or p.summary
-        # Perspective angles (STORM-style), always present: prior art is most often missed in another field or
+        # Perspective angles, always present: prior art is most often missed in another field or
         # under another name (a run once missed MoLoRA/LLaVA-MoLE this way).
         p.angles = p.angles[:4] + [
             Angle(title="Same mechanism, other field or modality",

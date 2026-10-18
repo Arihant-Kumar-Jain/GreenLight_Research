@@ -1,6 +1,6 @@
 """One HTTP seam for scholarly APIs: per-host pacing, 429 cooldowns, retries and a response cache.
 
-Lessons carried over from researchAgent: arXiv rate-limits per IP and answers 429 to *every* query once tripped,
+arXiv rate-limits per IP and answers 429 to *every* query once tripped,
 so requests to a host share one clock, a 429 opens a cooldown that later calls respect (instead of hammering),
 and identical requests are served from the cache.
 """

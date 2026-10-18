@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { api, type AuthInfo, type User } from './api'
 import { cx } from './ui'
 
-/* Sign in with Google (Google Identity Services), ported from GreenLight. The button returns an ID token; the backend
+/* Sign in with Google (Google Identity Services). The button returns an ID token; the backend
    verifies it and sets an HttpOnly session cookie. Local dev mode (no GOOGLE_CLIENT_ID) is always signed in. */
 
 type Gis = {

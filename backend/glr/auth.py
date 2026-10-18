@@ -1,4 +1,4 @@
-"""Sign in with Google and per-user sessions (ported from GreenLight).
+"""Sign in with Google and per-user sessions.
 
 The browser gets a Google ID token from Google Identity Services and posts it here. We verify it against Google's
 keys and our client ID, upsert the user and set an HttpOnly session cookie. The cookie holds a random token; only its

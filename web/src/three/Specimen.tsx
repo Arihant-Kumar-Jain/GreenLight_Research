@@ -1,5 +1,5 @@
 /**
- * Specimen: one fixed particle "engraving" behind the landing page that morphs as you scroll (after GreenLight's Journey).
+ * Specimen: one fixed particle "engraving" behind the landing page that morphs as you scroll.
  * Ink dots on paper; colour only where it means something.
  *
  *   0 question     a double helix: healthcare research starts from a question

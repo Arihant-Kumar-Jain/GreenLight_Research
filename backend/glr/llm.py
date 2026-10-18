@@ -1,5 +1,4 @@
-"""LLM client: model routing, JSON outputs, embeddings, cost trace. (Ported from Greenlight; the tool loop lives in
-harness/agent.py.)
+"""LLM client: model routing, JSON outputs, embeddings, cost trace. (The tool loop lives in harness/agent.py.)
 
 The endpoint comes from the active provider plug-in (providers.py): Nebius Token Factory, or OpenRouter as a
 stand-in with the same open models. Agents never see which one is used.

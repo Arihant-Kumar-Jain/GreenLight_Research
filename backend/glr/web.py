@@ -1,4 +1,4 @@
-"""Real-time web access via Tavily (search, extract), with a cache for re-runs. Ported from Greenlight.
+"""Real-time web access via Tavily (search, extract), with a cache for re-runs.
 
 Scouts use it for what scholarly indexes miss: blog posts, benchmark leaderboards, GitHub repos, workshop papers,
 very recent preprints, and reading full paper pages (arXiv HTML) when an agent needs more than the abstract.
