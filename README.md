@@ -176,6 +176,7 @@ bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default on
 
 | What | Result |
 |---|---|
+| Nebius Token Factory smoke test | models resolved: `NVIDIA-Nemotron-3-Nano-30B-A3B`, `nemotron-3-super-120b-a12b`, `Nemotron-3-Ultra-550b-a55b`, `Qwen3-Embedding-8B`; structured JSON 0.7–0.9 s per role; tool call OK ($0.00014) |
 | Credibility, "Attention Is All You Need" | 78/100 strong (77,978 citations, 300 HF models) |
 | Credibility, LLaVA-MoLE before/after bibliometrics fix | 10/100 ("0 citations", data never fetched) → 32/100 (8 citations, author h-index 33) |
 | Paper identity check | fuzzy title match merged "LoRA" with "LoRTA" → now strict; OpenAlex maps LoRA's DOI to an unrelated paper → refused |
@@ -256,7 +257,8 @@ retrieval eval table + gate calibration.
 - The retrieval eval was only partly run (paraphrased set); the "hard" vocabulary-mismatch set and gate calibration
   need `make eval` once. Until then the evidence gate is off.
 - NVIDIA NIM and vLLM reranker backends are implemented but untested without keys/GPU here.
-- All live runs so far used OpenRouter, not Nebius Token Factory: verify with `NEBIUS_API_KEY` before the demo.
+- The full pipeline benchmarks above were run on OpenRouter. Nebius Token Factory is now verified live (Nano / Super /
+  Ultra JSON in 0.7–0.9 s, Super tool calling, Qwen3-Embedding-8B); a full pipeline run on Nebius is still to do.
 - A pipeline run takes ~9 min; the dev server's `--reload` kills a running analysis when backend files change.
 
 ## Demo checklist (15 min before judging)
