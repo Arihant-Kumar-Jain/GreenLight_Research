@@ -7,6 +7,38 @@ claim links to the paper that supports it, and you can keep asking questions aft
 
 Built for the NVIDIA × Nebius hackathon (Apps & Agentic AI) on open models only.
 
+**Live: [glr.softkernel.dev](https://glr.softkernel.dev)** (sign in with Google)
+
+## At a glance
+
+| | |
+|---|---|
+| **Live app** | https://glr.softkernel.dev, deployed on Nebius |
+| **What it does** | Research idea in → multi-agent literature research → per-paper credibility scores → novelty check per idea component → debate → green / amber / red verdict with cited report → ongoing research chat |
+| **Models** | NVIDIA Nemotron 3 Nano / Super / Ultra + Qwen3-Embedding-8B, all on Nebius Token Factory |
+| **Live web** | Tavily search + Tavily Extract |
+| **Reranking** | NVIDIA NeMo Retriever NIM, Qwen3-Reranker-8B on our Nebius GPU (auto-detected), local cross-encoder, Nemotron Nano |
+| **Backend** | Python 3.12, FastAPI, asyncio, SQLite; hand-written agent harness (no agent framework) in `backend/glr/harness/` |
+| **Frontend** | React 19, Tailwind 4, three.js in `web/src/` |
+| **Entry points** | API `backend/glr/api.py` · research pipeline `backend/glr/pipeline.py` · agents `backend/glr/agents/` |
+| **Run locally** | `cp .env.example .env` (add `NEBIUS_API_KEY`, `TAVILY_API_KEY`) → `make setup` → `make dev` |
+| **Tests** | `make test`: 35 offline tests (no keys or network) |
+| **Evidence** | Every design decision below cites the measurement behind it; charts in `docs/benchmarks/` |
+
+## Sponsor tech in the code
+
+| Sponsor | Where it is called (paths under `backend/glr/`) |
+|---|---|
+| **Nebius Token Factory** | `providers.py` (`Nebius` provider, live model catalog) · `llm.py` (`chat`, `chat_json`, `embed`, `resolve_models`) |
+| **NVIDIA Nemotron 3 Nano** (`fast`) | Critic (`agents/research.py`), Auditor (`agents/auditor.py`), citation checker (`verify.py`), context compression (`harness/context.py`), query expansion (`corpus.py`), chat memory (`agents/chat.py`), knowledge graph (`kg.py`), fallback reranker (`rerank.py`) |
+| **NVIDIA Nemotron 3 Super** (`reason`) | intake, planner, Lead Researcher and Scouts (`agents/research.py`), novelty mapping, debate speakers (`agents/chamber.py`), report writer, research chat |
+| **NVIDIA Nemotron 3 Ultra** (`judge`) | the 3-Speaker panel that rules the verdict (`agents/chamber.py`, role `"judge"`) |
+| **Qwen3-Embedding-8B** (`embed`) | hybrid retrieval and HyDE (`corpus.py: retrieve`), paper similarity graph (`graph.py`), chat episodic memory (`agents/chat.py`) |
+| **Qwen3-Reranker-8B** on the Nebius GPU | `rerank.py` (`probe_gpu`, `_endpoint`): auto-detected, first in the reranker chain |
+| **NVIDIA NeMo Retriever** | `rerank.py` (`_nim`): reranking NIM, hosted or self-hosted |
+| **Tavily** | `web.py` (`search`, `extract`, with credit budget and cache) · `agents/toolbox.py` (`search_web` tool, `web_sweep` every run) · `papers.py` (full-text reading via Tavily Extract) |
+| **Nebius deploy** | repo root: `Dockerfile`, `docker-compose.yml`, `deploy/` (Compute VM, Container Registry, Object Storage backups) |
+
 > Every design choice in this README states the measurement that caused it. The numbers come from six live research
 > runs on the same test idea (18 Oct 2026), a retrieval eval on a 180-paper corpus, and component benchmarks. Charts
 > are in [`docs/benchmarks/`](docs/benchmarks/).
