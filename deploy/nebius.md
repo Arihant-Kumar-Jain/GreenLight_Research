@@ -20,9 +20,9 @@ Commands are from docs.nebius.com (Container Registry quickstart, Compute "publi
 
 ## 0. Before you deploy
 
-- **Token Factory catalog.** All live runs so far used OpenRouter. With the Nebius key in `.env`, open
-  `http://localhost:8100/api/health` and check that `models` shows a judge (Nemotron Ultra) and an embed model
-  (Qwen3-Embedding-8B), with no `models_error`. Then do one full run locally on Nebius.
+- **Token Factory catalog.** Verified live: Nemotron 3 Nano / Super / Ultra and Qwen3-Embedding-8B resolve on Token
+  Factory and full research runs complete in 6-7 min. With the Nebius key in `.env`, open
+  `http://localhost:8100/api/health` and check that `models` shows all four roles with no `models_error`.
 - **Google OAuth client.** In Google Cloud console → Credentials → your Web client, add the Authorized JavaScript origins
   `https://<your-domain>`, `http://localhost`, `http://localhost:5180` and `http://localhost:8100`.
 

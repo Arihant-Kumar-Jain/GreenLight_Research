@@ -82,7 +82,6 @@ def test_unknown_citations_are_not_zero():
 
 
 def test_graph_cites_and_clusters():
-    import numpy as np
     from glr import graph
     nodes = [
         {"id": "P1", "title": "Mixture of LoRA Experts for Multi Task Tuning", "arxiv_id": "2401.00001",

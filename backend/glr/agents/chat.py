@@ -112,7 +112,7 @@ async def _remember(pid: str, question: str, answer: str) -> None:
                                   "conversation: the researcher's decisions, changes to their idea, stated preferences "
                                   "or constraints, key findings (keep [P#] ids), open questions. Skip small talk and "
                                   "anything already known.",
-                                  f"Already known:\n" + "\n".join(f"- {i['text']}" for i in items[-MAX_FACTS:])
+                                  "Already known:\n" + "\n".join(f"- {i['text']}" for i in items[-MAX_FACTS:])
                                   + f"\n\nResearcher: {question[:2000]}\n\nAssistant: {answer[:3000]}",
                                   Facts, title="Long-term memory: extract facts", max_tokens=600)
     except Exception as e:

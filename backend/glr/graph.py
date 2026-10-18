@@ -21,7 +21,6 @@ from . import db, llm, trace
 from .config import settings
 from .corpus import words
 from .sources import http
-from .sources.arxiv import arxiv_id as parse_arxiv
 from .sources.openalex import API as OA, _params, norm_title
 
 ARXIV_ID_RE = re.compile(r"(\d{4}\.\d{4,5})")

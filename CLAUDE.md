@@ -5,19 +5,21 @@ Scouts + Critic) searches arXiv / OpenAlex / Hugging Face / Tavily / the citatio
 deterministic credibility score → quote-verified novelty matrix → Proponent vs Skeptic debate → Speaker (Nemotron Ultra)
 rules green / amber / red, guardrailed in code → cited report with a citation check → ongoing research chat.
 
-Hackathon: NVIDIA × Nebius (open models only). Sponsors to show: Nemotron on Nebius Token Factory, Tavily, Qwen/HF.
+Stack: NVIDIA Nemotron 3 (Nano / Super / Ultra) and Qwen3-Embedding-8B on Nebius Token Factory, Tavily for the live
+web, open models only.
 
 - Full feature/architecture docs and the benchmarks behind each design decision: `README.md`.
 
 ## Commands
 
 ```bash
-make setup   # cd backend && uv sync ; cd web && npm install
+make setup   # cd backend && uv sync --extra local ; cd web && npm install
 make dev     # API :8100 (uvicorn --reload) + Vite UI :5180 (proxies /api)
-make test    # offline tests, scripted model (no keys, no network)
+make test    # 35 offline tests, scripted model (no keys, no network)
+make eval P=<project>   # retrieval eval + evidence-gate calibration
 make check   # tsc + vite build + oxlint + backend import check + tests — run before committing
 ```
-Keys in `.env` (see `.env.example`): one LLM key (`NEBIUS_API_KEY` wins over `OPENROUTER_API_KEY`) + `TAVILY_API_KEY`.
+Keys in `.env` (see `.env.example`): `NEBIUS_API_KEY` (Token Factory) + `TAVILY_API_KEY`.
 Strongly recommended: `OPENALEX_API_KEY` (keyless OpenAlex shares a tiny per-IP budget), `S2_API_KEY`.
 
 ## Architecture
@@ -45,5 +47,5 @@ Strongly recommended: `OPENALEX_API_KEY` (keyless OpenAlex shares a tiny per-IP 
 ## Conventions
 
 Python 3.12, async, pydantic models for every LLM JSON output (`llm.chat_json`). No agent frameworks. Short module
-docstrings, sparse comments. Frontend: React 19 + Tailwind 4 + three.js, hash routes `#/p/<id>/<tab>`; Markdown is
+docstrings, sparse comments. Frontend: React 19 + Tailwind 4 + three.js, hash routes `#/` (landing), `#/app`, `#/p/<id>/<tab>`, `#/proof`; Markdown is
 rendered by our safe renderer in `ui.tsx` (no HTML injection). Never commit `.env` or `backend/data/glr.db*`.
