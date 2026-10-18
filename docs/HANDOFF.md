@@ -1,6 +1,6 @@
 # GreenLight Research: handoff (2026-10-18, night)
 
-Context transfer for the next session (human or Claude). Read this first, then `CLAUDE.md`, `README.md`, `docs/CHANGES.md`.
+Context transfer for the next session (human or Claude). Read this first, then `CLAUDE.md` and `README.md`. (`docs/CHANGES.md` was removed for the submission; history is in git.)
 
 ## 1. What this is
 
@@ -54,7 +54,7 @@ https://greenlightresearch.tech, https://glr.softkernel.dev. Add `https://www.gr
   **Arihant: update the default in `backend/glr/config.py`.** The NVIDIA key (expires 2027-04-18) was pasted in chat;
   revoke it after the hackathon.
 
-## 3. Built this session (all on main; details in docs/CHANGES.md)
+## 3. Built this session (all on main; details in `git log`)
 
 - **Auth:** Google sign-in (`backend/glr/auth.py`, `web/src/auth.tsx`). Modes google / dev (loopback only) / off.
   Per-user projects (others get 404). Optional `GLR_ALLOWED_EMAILS`. Daily caps `GLR_MAX_USD_PER_DAY` and
@@ -107,15 +107,17 @@ covered somewhere, no single paper covers all core ones).
 
 ## 5. Open TODO (UI side, by priority)
 
-- Verify on the live site that the Report tab now loads for `cec12a0b9871` (the fix is deployed; not re-checked after
-  deploy because the browser tab was frozen).
+- ~~Report tab freeze~~: fix confirmed in the deployed bundle (fresh regex per `inline()` call). Not yet clicked
+  through in a browser.
 - The verdict screen and the 3D views (galaxy, graph, chamber) weren't visually re-checked after the light conversion
   with this real project.
-- The intake user bubble repeats full questions (wordy). Show "Q → answer" compactly (keep sending the full text).
+- ~~Intake user bubble repeats full questions~~: now shows each answer with its question small (`UserText` in
+  `Intake.tsx`); the full text is still what gets sent.
 - The last intake message ("Let me confirm the brief…") dangles; the inline Start card now follows it.
 - Mobile was never tested on a device (the browser couldn't resize). Nav hides the wordmark below `sm`.
 - Unanswered decisions: should the Proof page (`GET /api/evals`) be public? Landing source wording (see 4.6).
-- README still describes the old dark landing; one Vite warning (PaperGraph static and dynamic import).
+- ~~README landing text, Vite PaperGraph warning~~: README was refreshed by Arihant; graph colours moved to
+  `three/graphColors.ts`, so PaperGraph is a real lazy chunk.
 - `deploy/backup.sh` isn't on a cron yet (needs an Object Storage bucket and access key).
 
 ## 6. How to work
@@ -124,5 +126,6 @@ covered somewhere, no single paper covers all core ones).
   mode).
 - To test UI flows without Google: copy `backend/glr` plus a minimal `.env` (no GOOGLE_CLIENT_ID) into the scratchpad
   and run uvicorn on 8102 plus `GLR_API=http://localhost:8102 npx vite --port 5181`. Delete the copy after (it holds keys).
-- Commit trailer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Add an entry to `docs/CHANGES.md` for
-  meaningful changes. Run `env -u PYTHONPATH make check` before pushing.
+- Commit trailer: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Describe changes in the commit message
+  (no changelog file). Run `env -u PYTHONPATH make check` before pushing.
+- Submission hygiene (Arihant's cleanup): no mentions of other projects in repo files.

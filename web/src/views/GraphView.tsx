@@ -1,7 +1,7 @@
 import { ArrowRight, Loader2, RefreshCw, Sparkles } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { api, type GraphData, type GraphEdge, type Project } from '../api'
-import { CLUSTER_COLORS, type EdgeKind } from '../three/PaperGraph'
+import { CLUSTER_COLORS, type EdgeKind } from '../three/graphColors'
 import { Badge, Button, Card, Cite, CredBadge, cx, SectionTitle } from '../ui'
 
 const PaperGraph = lazy(() => import('../three/PaperGraph'))

@@ -8,13 +8,12 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { GraphData } from '../api'
 import { createStage, GO, INFO, MUTED, pointCloud, pointsMaterial, STOP, WAIT } from './core'
+import { CLUSTER_COLORS, type EdgeKind } from './graphColors'
 
-export const CLUSTER_COLORS = [0x0b7a47, 0x1d4ed8, 0xb45309, 0x7a3e6b, 0x0e7490, 0xbe185d, 0x4d7c0f, 0x8a5a2b, 0x64748b]
 const EDGE = { cites: new THREE.Color(0x0b7a47), similar: new THREE.Color(0x155e75), idea: new THREE.Color(0xa85f00) }
 const PAPER = new THREE.Color(0xffffff)
 const IDEA_LEN: Record<string, number> = { 'same idea': 1.6, 'very close': 2.4, related: 3.4, background: 4.4 }
 
-export type EdgeKind = 'cites' | 'similar' | 'idea'
 
 function credColor(score: number | null) {
   if (score == null) return MUTED

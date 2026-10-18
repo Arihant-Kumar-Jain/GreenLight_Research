@@ -6,6 +6,28 @@ import { UserMenu } from './auth'
 import { Logo } from './Home'
 import { Badge, Button, Card, cx, Markdown, Typing } from './ui'
 
+/** Answers sent with "Send answers" arrive as "1. question\n→ answer" blocks. Show the answer first and the question
+ *  small, so the bubble reads as your answers rather than a copy of the questions. Anything else shows as typed. */
+function UserText({ text }: { text: string }) {
+  const parts = text.split(/\n\n+/)
+  const qa = parts.map((b) => /^\d+\.\s+([\s\S]+?)\n→\s*([\s\S]+)$/.exec(b.trim()))
+  const n = qa.findIndex((x) => !x) // free text typed after the answers stays as written
+  const answers = (n === -1 ? qa : qa.slice(0, n)) as RegExpExecArray[]
+  if (!answers.length) return <div className="whitespace-pre-wrap">{text}</div>
+  const rest = n === -1 ? '' : parts.slice(n).join('\n\n')
+  return (
+    <div className="space-y-2">
+      {answers.map((m, i) => (
+        <div key={i}>
+          <div className="text-[12px] leading-snug text-muted">{m[1]}</div>
+          <div className="font-medium">{m[2]}</div>
+        </div>
+      ))}
+      {rest && <div className="whitespace-pre-wrap border-t border-go/20 pt-2">{rest}</div>}
+    </div>
+  )
+}
+
 function BriefCard({ brief }: { brief: Brief | null | undefined }) {
   if (!brief) return <p className="text-sm text-muted">The brief builds up here as you talk.</p>
   const rows: [string, string | string[]][] = [
@@ -100,7 +122,7 @@ export default function Intake({ id }: { id: string }) {
               {msgs.map((m) => (
                 <div key={m.id} className={cx('animate-rise flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
                   <div className={cx('max-w-[85%] rounded-2xl px-4 py-3 text-[15px]', m.role === 'user' ? 'bg-go-soft' : 'border border-line bg-surface')}>
-                    {m.role === 'user' ? <div className="whitespace-pre-wrap">{m.content}</div> : <Markdown text={m.content} />}
+                    {m.role === 'user' ? <UserText text={m.content} /> : <Markdown text={m.content} />}
                     {m.data?.redactions?.length ? (
                       <div className="mt-2 flex items-center gap-1 text-[11px] text-muted"><ShieldCheck size={12} /> redacted before sending: {m.data.redactions.map((r) => `${r.count} ${r.label}`).join(', ')}</div>
                     ) : null}
