@@ -1,5 +1,9 @@
-# Let's Encrypt cert for the domain; HTTP redirects to HTTPS.
+# Let's Encrypt cert for the domain; HTTP redirects to HTTPS; www redirects to the bare domain.
 {$GLR_DOMAIN} {
 	encode zstd gzip
 	reverse_proxy app:8100
+}
+
+www.{$GLR_DOMAIN} {
+	redir https://{$GLR_DOMAIN}{uri} permanent
 }
