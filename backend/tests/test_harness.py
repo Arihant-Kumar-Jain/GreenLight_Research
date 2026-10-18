@@ -149,3 +149,30 @@ async def test_child_budget_charges_parent():
     child = parent.child(usd=0.5)
     child.charge(usd=0.6, llm=1)
     assert child.exhausted() and parent.spent_usd == pytest.approx(0.6) and not parent.exhausted()
+
+
+async def test_chat_memory_layers(monkeypatch):
+    """Long-term facts are extracted and de-duplicated; history folds by tokens; recall finds old exchanges."""
+    from glr import db
+    from glr.agents import chat, intake
+    pid = db.create_project("memory test")
+
+    async def fake(role, messages, tools=None, title=""):
+        if "extract facts" in title:
+            return reply(text='{"facts": [{"kind": "decision", "text": "Use FLAN only"}]}')
+        return reply(text="- folded summary")
+    llm.FAKE = fake
+    monkeypatch.setattr(llm, "EMBED_FAKE", lambda texts: [[1.0] + [0.0] * 1023 for _ in texts])
+    with trace.scope(project_id=pid):
+        await chat._remember(pid, "q", "a")
+        await chat._remember(pid, "q", "a")  # same fact again: not duplicated
+        assert [f["text"] for f in intake.load_memory(pid, "facts")["items"]] == ["Use FLAN only"]
+        for i in range(10):
+            db.add_message(pid, "chat", "user", "x " * 900)
+        s = await chat._fold(pid, db.messages(pid, "chat"))
+        assert s["upto"] == 10 - chat.KEEP_RECENT and s["text"]
+        mid = db.add_message(pid, "chat", "assistant", "old answer", {"vec": [1.0] + [0.0] * 1023, "question": "old q"})
+        got = await chat._recall(pid, "new q", exclude_ids=set())
+        assert got and got[0]["q"] == "old q"
+        assert not await chat._recall(pid, "new q", exclude_ids={mid})
+    llm.EMBED_FAKE = None

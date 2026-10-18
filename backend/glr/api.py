@@ -256,7 +256,12 @@ async def run_retrieval_eval(pid: str, rebuild: bool = False):
 @app.get("/api/projects/{pid}/chat")
 async def get_chat(pid: str):
     _project_or_404(pid)
-    return {"messages": db.messages(pid, "chat"), "busy": pid in _chat_tasks and not _chat_tasks[pid].done()}
+    msgs = db.messages(pid, "chat")
+    for m in msgs:  # episodic-memory vectors stay server-side
+        if m.get("data"):
+            m["data"].pop("vec", None)
+    return {"messages": msgs, "busy": pid in _chat_tasks and not _chat_tasks[pid].done(),
+            "memory": (intake.load_memory(pid, "facts").get("items") or [])}
 
 
 @app.post("/api/projects/{pid}/chat")

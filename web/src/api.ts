@@ -13,7 +13,7 @@ export type Message = {
     stopped_because?: string; budget?: { usd: number; llm_calls: number; tool_calls: number; elapsed_s: number }
     context?: { compressions: number; elided: number; folded_groups: number; peak_tokens: number }
     redactions?: { type: string; label: string; count: number }[]; error?: boolean
-    citations?: { supported: number; partial: number; unsupported: number } | null } | null
+    citations?: { supported: number; partial: number; unsupported: number; revised_from?: number | null } | null; recalled?: number } | null
 }
 
 export type ProjectSummary = {
@@ -146,7 +146,7 @@ export const api = {
   remove: (id: string) => req<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
   project: (id: string) => req<Project>(`/api/projects/${id}`),
   trace: (id: string, after: number) => req<{ events: TraceEvent[]; totals: Totals }>(`/api/projects/${id}/trace?after=${after}`),
-  chat: (id: string) => req<{ messages: Message[]; busy: boolean }>(`/api/projects/${id}/chat`),
+  chat: (id: string) => req<{ messages: Message[]; busy: boolean; memory?: { kind: string; text: string }[] }>(`/api/projects/${id}/chat`),
   chatSend: (id: string, text: string) => post<{ messages: Message[]; busy: boolean }>(`/api/projects/${id}/chat`, { text }),
   scorePaper: (id: string, pid: string) => post<Paper>(`/api/projects/${id}/papers/${pid}/score`),
   graph: (id: string, refresh = false) => req<GraphData>(`/api/projects/${id}/graph${refresh ? '?refresh=1' : ''}`),

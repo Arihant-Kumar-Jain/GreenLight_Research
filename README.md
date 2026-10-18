@@ -50,6 +50,8 @@ No agent framework. `backend/glr/harness/` is a hand-written runtime every agent
 | **Context engine** | tier 1 elides old tool results to per-tool digests (pairing intact), tier 2 folds whole turn groups into a Nano-written working memory, tier 3 pins task + memory + shared notebook in the system prompt. Every compression is traced with before/after tokens |
 | **Cross-agent compression** | the Lead sees only scouts' structured reports, never their raw search results |
 | **Shared blackboard** | `note` writes findings to a project notebook pinned into every agent's prompt |
+| **Chat memory** | pinned project state · long-term facts (Nano-extracted, de-duplicated) · token-budget rolling summary · episodic recall of similar earlier exchanges (Qwen3 embeddings) · in-turn compression |
+| **Self-correction** | chat + report sentences are citation-checked against the cited papers; chat answers with unsupported sentences are revised once and re-checked |
 | **Trace** | every LLM call (provider, model, tokens, latency, cost), tool call, API call, spawn, compression and guardrail → live agent graph in the UI |
 
 ## Credibility score (0–100, deterministic)

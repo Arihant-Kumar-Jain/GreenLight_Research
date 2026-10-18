@@ -5,6 +5,20 @@ For each change: what, why, new env vars, how to test, open TODOs.
 
 ---
 
+## 2026-10-18 (latest) — Arihant (with Claude): chat memory + self-correction, retrieval stack, stop button
+
+- **Research chat memory, 5 layers** (`agents/chat.py`): pinned project state; long-term facts extracted by Nano after
+  every exchange (decisions, idea changes, preferences, findings with [P#]; de-duplicated, max 40, shown in the Chat
+  sidebar); rolling summary when verbatim history exceeds 5k tokens (keeps last 6 messages); episodic recall of the
+  most similar earlier exchanges by Qwen3 embedding (vectors stay server-side); harness in-turn compression.
+- **Self-correction**: chat citations are normalised to [P#], checked against the cited papers; if any sentence is
+  unsupported the agent revises once and the revision is re-checked (kept only if not worse).
+- Live: a decision ("FLAN + MMLU on Llama-3-8B") and 4 findings were stored after one turn.
+- Retrieval: reranker chain, expansion, gate, MMR (see README "Retrieval pipeline" / "Benchmarks"). Stop button.
+- Tests: 22 offline.
+
+---
+
 ## 2026-10-18 (later) — Arihant (with Claude): paper relationship graph
 
 **What.** New workspace tab **Relationship graph** (`backend/glr/graph.py`, `web/src/three/PaperGraph.tsx`,

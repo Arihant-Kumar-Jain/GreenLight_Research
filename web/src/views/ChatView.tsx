@@ -13,6 +13,7 @@ const STARTERS = [
 export default function ChatView({ p, events, onBusy }: { p: Project; events: TraceEvent[]; onBusy: (b: boolean) => void }) {
   const [msgs, setMsgs] = useState<Message[]>([])
   const [busy, setBusy] = useState(false)
+  const [memory, setMemory] = useState<{ kind: string; text: string }[]>([])
   const [text, setText] = useState('')
   const [err, setErr] = useState('')
   const end = useRef<HTMLDivElement>(null)
@@ -25,6 +26,7 @@ export default function ChatView({ p, events, onBusy }: { p: Project; events: Tr
         const c = await api.chat(p.id)
         if (!alive) return
         setMsgs(c.messages)
+        setMemory(c.memory ?? [])
         setBusy(c.busy)
         onBusy(c.busy)
       } catch (e) { setErr((e as Error).message) }
@@ -51,7 +53,8 @@ export default function ChatView({ p, events, onBusy }: { p: Project; events: Tr
   const live = events.filter((e) => e.id > since.current && e.agent === 'Research Chat' && ['tool', 'compress', 'llm'].includes(e.kind)).slice(-5)
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-330px)] min-h-[520px] max-w-4xl flex-col">
+    <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_280px]">
+    <div className="flex h-[calc(100vh-330px)] min-h-[520px] flex-col">
       <div className="scroll-thin flex-1 space-y-5 overflow-y-auto pr-2">
         {!msgs.length && (
           <div className="py-10 text-center">
@@ -72,6 +75,8 @@ export default function ChatView({ p, events, onBusy }: { p: Project; events: Tr
                   <span className="inline-flex items-center gap-1"><Wrench size={11} />{m.data.tool_calls} tool call(s)</span>
                   {m.data.budget && <span>${m.data.budget.usd.toFixed(4)} · {m.data.budget.elapsed_s}s</span>}
                   {m.data.context && m.data.context.compressions > 0 && <span>context compressed ×{m.data.context.compressions}</span>}
+                  {m.data.recalled ? <span>recalled {m.data.recalled} earlier exchange(s)</span> : null}
+                  {m.data.citations?.revised_from ? <span className="text-wait">self-corrected: {m.data.citations.revised_from} unsupported → {m.data.citations.unsupported}</span> : null}
                   {m.data.citations && <span>citations checked: {m.data.citations.supported} supported{m.data.citations.partial ? `, ${m.data.citations.partial} partial` : ''}{m.data.citations.unsupported ? `, ${m.data.citations.unsupported} unsupported` : ''}</span>}
                 </div>
               )}
@@ -96,6 +101,14 @@ export default function ChatView({ p, events, onBusy }: { p: Project; events: Tr
         <button onClick={() => send(text)} disabled={!text.trim() || busy} className="grid h-11 w-11 place-items-center rounded-xl bg-go text-[#05210f] disabled:opacity-30"><ArrowUp size={18} /></button>
       </div>
       {err && <p className="mt-2 text-sm text-stop">{err}</p>}
+    </div>
+    <Card className="scroll-thin hidden h-fit max-h-[calc(100vh-330px)] overflow-y-auto p-4 lg:block">
+      <h3 className="eyebrow mb-2">Long-term memory</h3>
+      <p className="mb-3 text-[11px] text-muted">Facts the agent extracted from this conversation. Pinned into every answer; older turns are folded into a summary and recalled by similarity.</p>
+      {memory.length ? memory.map((f, i) => (
+        <div key={i} className="mb-2 text-xs"><span className="font-mono text-[10px] text-info">{f.kind}</span><div><Markdown text={f.text} className="[&_p]:m-0" /></div></div>
+      )) : <p className="text-xs text-muted">Nothing yet.</p>}
+    </Card>
     </div>
   )
 }
