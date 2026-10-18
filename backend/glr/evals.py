@@ -147,7 +147,7 @@ async def _run_set(pid: str, rerankers: list[str] | None, rebuild: bool, style: 
                 lat, rr, ndcg, hits, phit = [], [], [], {1: 0, 5: 0, 10: 0}, 0
                 pos_scores, neg_scores = [], []
                 # sequential (honest latency), except the slow LLM reranker which runs 6-way parallel
-                par = 6 if kind == "llm" else 1
+                par = 6 if kind == "llm" or cfg.get("expand_query") else 1
                 sem = asyncio.Semaphore(par)
 
                 async def one(question: str):

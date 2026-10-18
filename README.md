@@ -68,11 +68,53 @@ Retracted → 0. Papers < 18 months old get their impact weight moved to authors
 being punished for missing citations. Identity is verified: OpenAlex records are accepted only if the title matches
 (OpenAlex maps LoRA's DOI to an unrelated paper; we refuse it and fall back to Semantic Scholar).
 
-## Retrieval (honest status)
+## Retrieval pipeline
 
-Hybrid BM25 + Qwen3-Embedding-8B with reciprocal rank fusion over abstracts and read full texts. **No reranker yet**
-(OpenRouter lists no reranker models; options: local `bge-reranker-v2-m3`, Nemotron Nano as reranker, or a Nebius-hosted
-NVIDIA reranker), no relevance cutoff for abstention, and no retrieval eval yet.
+`corpus.retrieve()`: **query expansion** (Nemotron Nano: 2 paraphrases + a HyDE passage, with a 6 s deadline) →
+**BM25 + Qwen3-Embedding-8B** recall for every variant, fused by weighted **RRF** → **cross-encoder rerank** of the top 40
+→ **calibrated evidence gate** (`sufficient_evidence: false` when the top score is below the threshold measured for
+that reranker) → **MMR** diversity → **±1 neighbour context**. Full-text chunks carry a contextual title header.
+Every search result is also **relevance-triaged** against the research idea by the cross-encoder.
+
+Reranker chain (`rerank.py`, first available wins): **NVIDIA NeMo Retriever NIM** (`NVIDIA_API_KEY` or self-hosted)
+→ any **vLLM `/rerank`** endpoint (e.g. Qwen3-Reranker-8B on our RTX PRO 6000) → **local cross-encoder**
+(bge-reranker-v2-m3 on CUDA, MiniLM-L-12 on Mac) → **Nemotron Nano** listwise grading.
+
+## Benchmarks (all measured, none estimated)
+
+**Live end-to-end run** (OpenRouter Nemotron + Tavily, idea "per-token sparse mixture of LoRA experts"):
+
+| | |
+|---|---|
+| Wall time / cost | 9.3 min / **$0.0995** |
+| Agents / LLM calls / tool calls | 20 / 217 / 71 |
+| Papers collected / credibility-scored / audited | 180 / 80 / 8 |
+| Research rounds | 2 (Critic rejected round 1) |
+| Context compressions | 17.3k → 8.6k tokens (scouts), 25.7k → 10.8k (lead) |
+| Verdict | AMBER (Speaker), guardrails agreed |
+| Relationship graph | 60 papers, 36 citation links (53/60 reference lists from arXiv bibliographies, 6 OpenAlex), 89 similarity links, 5 clusters |
+| Research chat follow-up | 6 tool calls, 12 s, $0.004 |
+
+**Retrieval eval** (`make eval P=<id>`; 40 synthetic paraphrased questions written from the project's own passages,
+gold = exact source chunk, 180-paper corpus; partial run, the "hard" no-shared-vocabulary set was not run yet):
+
+| Pipeline | Recall@5 | MRR@10 | Latency |
+|---|---|---|---|
+| BM25 | 0.950 | 0.874 | 5 ms |
+| Dense (Qwen3-Embedding-8B) | 0.900 | 0.806 | 759 ms |
+| Hybrid RRF | 0.950 | 0.877 | 6 ms |
+| Hybrid + expansion | 0.900 | 0.830 | 1.6 s |
+| Hybrid + rerank (MiniLM-L-12) | 0.900 | 0.857 | 1.9 s |
+| Evidence gate (MiniLM-L-12), answerable vs 12 off-topic | **AUROC 1.0** | | |
+
+Honest reading: on paraphrased questions keyword search is already near the ceiling, so expansion and reranking
+don't add recall here; their value is the evidence gate (perfect separation of answerable vs off-topic questions)
+and vocabulary-mismatch queries, which the "hard" set measures (not run yet).
+
+**Reranker latency** (40 real passages, M-series Mac): MiniLM-L-12 1.5 s · bge-reranker-base 4.6 s ·
+bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default only on CUDA.
+
+**Offline tests**: 21 passing (`make test`).
 
 ## Invariants (the pitch)
 
