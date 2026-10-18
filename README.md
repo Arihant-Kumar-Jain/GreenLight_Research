@@ -21,18 +21,40 @@ Papers and Semantic Scholar.
     │   ▲ compressed scout reports only                       arXiv · OpenAlex · HF Papers · Tavily · citation graph
     │   └── Critic (Nano) rejects thin coverage → round 2 (targeted scouts)          full-text reading · shared notebook
     ▼
- Reader (full texts of the closest papers) → Credibility Scorer (OpenAlex + HF + S2 → deterministic 0-100)
-    ▼                                        → Auditor (red flags, quote-verified)
- Novelty Mapper: components × closest papers, every overlap must quote the paper (verified) → novelty score
+ Relevance Ranker (cross-encoder: every paper vs the idea) → Reader (full texts of the closest papers)
+    ▼
+ Credibility Scorer (OpenAlex + HF + S2 → deterministic 0-100) ∥ Auditor (red flags, quote-verified)
+    ▼
+ Novelty Mapper: components × closest papers, every overlap must quote the paper (verified) → strict 2nd judge on
+                 every "full" (same mechanism, other setting = partial) → novelty score
     ▼
  Research Chamber: Proponent ∥ Skeptic (openings, rebuttals, evidence ids, struck/weak args) → Speaker (Ultra)
     ▼
  Guardrails (code): credible paper doing all core components → RED · core component done → ≥AMBER · thin search → ≥AMBER
     ▼
- Report Writer → Citation Checker (each [P#] sentence judged against the cited paper's passages)
+ Report Writer → Citation Checker (each [P#] sentence judged against the cited paper's passages) → Export .md
     ▼
- Research Chat (Super + full toolbox + 3-layer memory) — ask, challenge, pivot, search more
+ Relationship Graph (citations from reference lists, embedding similarity, clusters)
+    ▼
+ Research Chat (Super + full toolbox + 5-layer memory + citation self-correction) — ask, challenge, pivot, search more
 ```
+
+## Sponsor tech and models
+
+| Role | Model / service | Used for |
+|---|---|---|
+| `fast` | **NVIDIA Nemotron 3 Nano** | scouts' helpers, Critic, Auditor, citation checks, context compression, query expansion, memory extraction, fallback reranker |
+| `reason` | **NVIDIA Nemotron 3 Super** | intake, planner, Lead Researcher, Scouts, novelty mapping, Chamber speakers, report, research chat |
+| `judge` | **NVIDIA Nemotron 3 Ultra** | the Speaker's green / amber / red ruling |
+| `embed` | **Qwen3-Embedding-8B** (Matryoshka 1024-d) | dense retrieval, HyDE, paper similarity graph, episodic chat memory |
+| rerank | **NVIDIA NeMo Retriever reranking NIM** · vLLM (Qwen3-Reranker-8B) · local bge-reranker-v2-m3 / MiniLM · Nemotron Nano | cross-encoder reranking, relevance triage, evidence gate |
+| inference | **Nebius Token Factory** (OpenRouter as stand-in, same models) | every LLM + embedding call; provider chosen by key (`providers.py`) |
+| web | **Tavily** search + extract | live web scouting, full-text reading; credit budget + cache |
+| scholarly | arXiv · OpenAlex · Hugging Face Papers · Semantic Scholar | paper search, citation graph, bibliometrics, adoption signals |
+| GPU (optional) | RTX PRO 6000 (CUDA) | heavy local reranker / self-hosted vLLM reranker |
+
+Model roles resolve from the provider's live catalog unless pinned with `GLR_MODEL_*`; `GET /api/health` shows what
+was picked.
 
 ## What makes it agentic (the harness)
 
@@ -82,6 +104,40 @@ Reranker chain (`rerank.py`, first available wins): **NVIDIA NeMo Retriever NIM*
 → any **vLLM `/rerank`** endpoint (e.g. Qwen3-Reranker-8B on our RTX PRO 6000) → **local cross-encoder**
 (bge-reranker-v2-m3 on CUDA, MiniLM-L-12 on Mac) → **Nemotron Nano** listwise grading.
 
+## Research chat memory (5 layers) + self-correction
+
+1. **Pinned project state**: brief, verdict, novelty, closest papers, shared notebook, always in the system prompt.
+2. **Long-term facts**: after every exchange Nemotron Nano extracts durable facts (decisions, idea changes,
+   preferences, findings with [P#], open questions); de-duplicated, max 40, pinned, shown in the Chat sidebar.
+3. **Rolling summary**: when the verbatim history exceeds 5k tokens, older turns are folded by Nano (last 6 kept).
+   The intake chat folds the same way (4k-token budget).
+4. **Episodic recall**: every exchange is embedded with Qwen3; the most similar earlier exchanges are recalled
+   verbatim for a new message, even after they were folded away.
+5. **In-turn compression**: the harness elides/folds tool results inside a long agent turn.
+
+After answering, citations are normalised to `[P#]` and every cited sentence is checked against the cited papers'
+passages. If any is unsupported, the agent revises the answer once and the revision is re-checked (kept only if not
+worse); anything still unsupported is marked ⚠️ in the answer.
+
+## Relationship graph
+
+3D force-directed graph of the ~60 most relevant papers plus the idea (`graph.py`, `three/PaperGraph.tsx`).
+- **cites** edges from reference lists: Semantic Scholar batch (with key) → OpenAlex `referenced_works` → the paper's
+  own bibliography parsed from its arXiv HTML page (matched by arXiv id or exact 5+-word title). Each edge keeps the
+  reference line as proof. Particles flow from citing to cited paper.
+- **similar** edges: nearest neighbours of Qwen3 abstract embeddings (adaptive 88th-percentile threshold).
+- **idea** edges: the Lead Researcher's relation (same idea / very close / related).
+- **clusters**: weighted label propagation, labelled by distinctive title words (no LLM).
+- Click a paper → who it cites, who cites it, what it resembles, each with an **Explain** button (Nemotron Nano, cached).
+
+## Verdict guardrails (code, after the Speaker)
+
+- A paper with credibility ≥ 35 and a **verified full overlap on every core component** → forced **RED** ("already done").
+  Low-credibility or retracted "same idea" papers can't force red; they push to at least amber.
+- Any core component fully covered by credible verified work → at least **AMBER**.
+- Thin evidence (< 10 papers or low review confidence) → at least **AMBER**: no green on a search that could have missed prior work.
+- The Speaker's original call is kept and shown next to the guardrail reason.
+
 ## Benchmarks (all measured, none estimated)
 
 **Live end-to-end run** (OpenRouter Nemotron + Tavily, idea "per-token sparse mixture of LoRA experts"):
@@ -116,7 +172,10 @@ and vocabulary-mismatch queries, which the "hard" set measures (not run yet).
 **Reranker latency** (40 real passages, M-series Mac): MiniLM-L-12 1.5 s · bge-reranker-base 4.6 s ·
 bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default only on CUDA.
 
-**Offline tests**: 21 passing (`make test`).
+**Offline tests**: 22 passing (`make test`): harness (parallel tools, loop detection, review gate, budget-forced
+finish, tier-1/2 compression with tool-call pairing checked on every request, child budgets, chat memory layers),
+credibility, quote verification, citation normalisation, guardrails, strict title identity, graph citation matching
++ clustering, MMR, reranker fallback, gate calibration.
 
 ## Invariants (the pitch)
 
@@ -132,9 +191,10 @@ bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default on
 
 ```bash
 cp .env.example .env      # OPENROUTER_API_KEY or NEBIUS_API_KEY, TAVILY_API_KEY (+ optional OPENALEX_API_KEY, S2_API_KEY)
-make setup                # uv sync + npm install
+make setup                # uv sync --extra local (torch + sentence-transformers) + npm install
 make dev                  # API :8100 + UI :5180
-make test                 # 15 offline tests (scripted model: harness, compression, budgets, scoring, guardrails)
+make test                 # 22 offline tests (scripted model, no keys or network)
+make eval P=<project_id>  # retrieval eval + evidence-gate calibration (results on the Proof page, #/proof)
 make check                # tsc + vite build + oxlint + import check + tests
 ```
 
@@ -142,8 +202,48 @@ UI: landing (three.js idea-in-a-galaxy hero) → intake chat with quick replies 
 **Verdict** · **Agents (live)** (agent graph + trace) · **Paper galaxy** (3D, orbit = closeness, colour = credibility)
 · **Relationship graph** (3D force graph: citation links with the reference line as proof, embedding similarity,
 auto-clusters, "explain how these two relate")
-· **Papers** (credibility breakdowns, audits, links) · **Novelty matrix** (verified quotes) · **Chamber** (3D chamber +
-transcript) · **Report** (citation check) · **Chat** · **Notebook**.
+· **Papers** (credibility breakdowns, relevance, audits, links) · **Novelty matrix** (verified quotes, strict-judge
+downgrades) · **Chamber** (3D chamber + transcript) · **Report** (citation check, **Export .md**) · **Chat** (memory
+panel, self-correction) · **Notebook**. Header: traffic light, **Stop** / **Re-run**. **Proof** page (`#/proof`):
+retrieval eval table + gate calibration.
+
+## Configuration (`.env`, see `.env.example`)
+
+| Var | Purpose |
+|---|---|
+| `NEBIUS_API_KEY` / `OPENROUTER_API_KEY` | LLM + embeddings (Nebius wins when both are set); `GLR_LLM_PROVIDER` forces one |
+| `TAVILY_API_KEY`, `GLR_TAVILY_BUDGET` | live web; stop at this many credits |
+| `OPENALEX_API_KEY`, `OPENALEX_MAILTO` | OpenAlex own daily budget (keyless is a small shared per-IP budget) |
+| `S2_API_KEY` | Semantic Scholar: influential citations, fallback bibliometrics, batch reference lists |
+| `HF_TOKEN` | higher Hugging Face rate limits |
+| `NVIDIA_API_KEY`, `GLR_NIM_RERANK_URL`, `GLR_NIM_RERANK_MODEL` | NeMo Retriever reranking NIM (hosted or self-hosted) |
+| `GLR_RERANK_URL`, `GLR_RERANK_MODEL`, `GLR_RERANK_KEY` | any `/rerank` server (e.g. vLLM + Qwen3-Reranker-8B) |
+| `GLR_RERANKER`, `GLR_RERANK_LOCAL_MODEL` | force a reranker backend / local model |
+| `GLR_QUERY_EXPANSION`, `GLR_EXPANSION_DEADLINE` | multi-query + HyDE on/off, deadline in seconds |
+| `GLR_MAX_USD_PER_RUN`, `GLR_RESEARCH_ROUNDS`, `GLR_MAX_SCOUTS`, `GLR_CONTEXT_BUDGET`, `GLR_PAPERS_TO_READ` | harness budgets |
+| `GLR_THINKING`, `GLR_MODEL_FAST/REASON/JUDGE/EMBED` | Nemotron reasoning traces; pin model ids |
+
+## API
+
+| Endpoint | |
+|---|---|
+| `GET /api/health` | keys, provider, models, reranker chain, Tavily credits |
+| `POST /api/projects` · `POST/GET /api/projects/{id}/intake` | start + continue the intake chat |
+| `POST /api/projects/{id}/start` · `/stop` · `/rerun` · `DELETE /api/projects/{id}` | run control |
+| `GET /api/projects/{id}` · `/trace?after=` · `/papers/{pid}` · `POST /papers/{pid}/score` | workspace data, live trace, paper detail, on-demand credibility |
+| `GET /api/projects/{id}/graph` · `POST /graph/explain` | relationship graph, explain one link |
+| `POST/GET /api/projects/{id}/chat` | research chat (+ long-term memory items) |
+| `GET /api/evals` · `POST /api/evals/retrieval/{id}` | Proof page results, run the retrieval eval |
+
+## Known limitations
+
+- No sign-in or per-user data yet (single local user): don't expose it publicly. GreenLight's Google auth can be ported.
+- SQLite only; hosting needs Postgres/pgvector (as in GreenLight) and the Nebius Serverless deploy is not done.
+- The retrieval eval was only partly run (paraphrased set); the "hard" vocabulary-mismatch set and gate calibration
+  need `make eval` once. Until then the evidence gate is off.
+- NVIDIA NIM and vLLM reranker backends are implemented but untested without keys/GPU here.
+- All live runs so far used OpenRouter, not Nebius Token Factory: verify with `NEBIUS_API_KEY` before the demo.
+- A pipeline run takes ~9 min; the dev server's `--reload` kills a running analysis when backend files change.
 
 ## Demo checklist (15 min before judging)
 
@@ -155,20 +255,25 @@ transcript) · **Report** (citation check) · **Chat** · **Notebook**.
    → Novelty matrix → Chamber → Chat. **Stop** cancels a run; **Re-run** starts over.
 4. Run `make eval P=<project_id>` once: it writes `data/eval/calibration.json`, which switches on the
    `sufficient_evidence` gate (until then the gate is off). Report tab → **Export .md** downloads the cited report.
-5. Not built: sign-in (don't expose publicly), Postgres/hosting, the "hard" retrieval eval set (`make eval P=<id>`).
+5. Not built: see Known limitations.
 
 ## Layout
 
 ```
 backend/glr/
   harness/        agent.py (runtime loop, swarm) · context.py (3-tier compression) · tools.py (@tool, finish tools)
-  agents/         intake · planner · research (Lead, Scouts, Critic) · toolbox · auditor · novelty · chamber · verdict · writer · chat
+  agents/         intake · planner · research (Lead, Scouts, Critic) · toolbox (+ relevance triage) · auditor · novelty
+                  (+ strict judge) · chamber · verdict · writer · chat (5-layer memory, self-correction)
   sources/        arxiv · openalex · hf · s2 · http (per-host pacing, 429 cooldown, cache)
   llm.py providers.py   Nemotron roles on Nebius / OpenRouter (from GreenLight)
-  papers.py credibility.py corpus.py verify.py   registry + enrichment · score · hybrid BM25+Qwen3 RAG · quote/claim checks
+  papers.py credibility.py corpus.py verify.py   registry + enrichment · score · retrieval pipeline · quote/claim checks
+  rerank.py       NIM / vLLM endpoint / local cross-encoder / Nemotron reranker chain, calibrated thresholds
+  graph.py        relationship graph (citations, similarity, clusters, explain)
+  evals.py        retrieval eval + evidence-gate calibration (scripts/eval_retrieval.py)
   budget.py trace.py db.py privacy.py web.py pipeline.py api.py
 backend/tests/    offline tests with a scripted model
-web/src/          React 19 + Tailwind 4 + three.js (three/: Constellation, PaperGalaxy, ChamberScene, glass, core)
+web/src/          React 19 + Tailwind 4 + three.js (three/: Constellation, PaperGalaxy, PaperGraph, ChamberScene, glass, core)
+                  views/: Agents · Papers · Graph · Novelty · Chamber · Report · Chat; ProofPage, Intake, Home
 ```
 
 Prior art we learned from: [researchAgent](https://github.com/Sachitbansal/researchAgent) (single-agent RAG over arXiv:
