@@ -25,6 +25,9 @@ from .intake import brief_text
 from .planner import Plan
 
 
+PERSPECTIVES = ("Same mechanism, other field or modality", "Reviewer: is this incremental?")
+
+
 class PaperRelation(BaseModel):
     id: str = Field(description="P# id")
     relation: Literal["same idea", "very close", "related", "background"]
@@ -116,6 +119,15 @@ async def run(pid: str, brief: dict, plan: Plan, budget: Budget) -> dict:
         if not tasks:
             return {"error": "no_tasks", "detail": "Pass at least one {angle, instructions, seed_queries}."}
         rounds["n"] += 1
+        if rounds["n"] == 1:  # perspective angles are mandatory in round 1 (the Lead tends to drop them)
+            persp = [a for a in plan.angles if a.title in PERSPECTIVES]
+            have = {str(t.get("angle", "")).lower() for t in tasks}
+            missing = [a for a in persp if not any(a.title.lower()[:20] in h for h in have)]
+            if missing:
+                tasks = tasks[:max(1, settings.max_scouts - len(missing))] + [
+                    {"angle": a.title, "instructions": a.instructions, "seed_queries": a.seed_queries} for a in missing]
+                trace.log("guard", f"Added {len(missing)} mandatory perspective scout(s) to round 1",
+                          ", ".join(a.title for a in missing))
         jobs = []
         for t in tasks:
             scout_n["n"] += 1
@@ -178,7 +190,7 @@ async def run(pid: str, brief: dict, plan: Plan, budget: Budget) -> dict:
                  max_steps=10 + 4 * settings.max_research_rounds, budget=budget,
                  context_tokens=settings.context_budget_tokens, keep_recent=4,
                  pinned=lambda: toolbox.notebook_text(pid, 30), review=review,
-                 max_reviews=max(0, settings.max_research_rounds - 1), max_tokens=6000)
+                 max_reviews=max(0, settings.max_research_rounds + 1), max_tokens=6000)
     angles = "\n".join(f"- {a.title}: {a.instructions} (seed queries: {', '.join(a.seed_queries)})" for a in plan.angles)
     task = (f"{idea_txt}\n\nPlanned search angles:\n{angles}\n\nRound 1 MUST include the two perspective angles "
             f"('Same mechanism, other field or modality' and 'Reviewer: is this incremental?').\n\n"

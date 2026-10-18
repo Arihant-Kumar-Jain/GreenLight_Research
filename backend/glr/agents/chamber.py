@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .. import db, llm, trace
 
@@ -87,15 +87,30 @@ class Clash(BaseModel):
 
 
 class Ruling(BaseModel):
-    clashes: list[Clash] = Field(description="2-4 decisive clashes")
-    deciding_factor: str
+    clashes: list[Clash] = Field(default_factory=list, description="2-4 decisive clashes")
+    deciding_factor: str = ""
     light: Literal["green", "amber", "red"]
-    headline: str = Field(description="One-line verdict for the researcher")
-    confidence: float = Field(description="0-1")
-    reasons: list[str] = Field(description="3-5 reasons citing evidence ids")
+    headline: str = Field("", description="One-line verdict for the researcher")
+    confidence: float = Field(0.5, description="0-1")
+    reasons: list[str] = Field(default_factory=list, description="3-5 reasons citing evidence ids")
     differentiation: list[str] = Field(default_factory=list,
                                        description="How to make the idea clearly novel vs the closest work")
     next_steps: list[str] = Field(default_factory=list, description="Concrete next research steps / experiments")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _aliases(cls, d):
+        """Nemotron Ultra sometimes names the colour 'verdict'/'ruling'/'color' or nests it; accept those."""
+        if isinstance(d, dict) and d.get("light") not in ("green", "amber", "red"):
+            for k in ("verdict", "ruling", "color", "colour", "decision", "rating"):
+                v = str(d.get(k) or "").lower()
+                hit = next((c for c in ("red", "amber", "green") if c in v), None)
+                if hit:
+                    d = {**d, "light": hit}
+                    break
+            if not d.get("headline"):
+                d["headline"] = str(d.get("summary") or d.get("verdict") or "")[:300]
+        return d
 
 
 SIDES = {

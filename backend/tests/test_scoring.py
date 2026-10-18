@@ -161,3 +161,9 @@ def test_split_speaker_panel_blocks_green():
 def test_table_rows_are_not_claims():
     assert claims("| [P1] Paper | 2024 | 50 | ✓ done |\nReal claim about methods here [P2].") == \
         [{"text": "Real claim about methods here [P2].", "refs": ["P2"]}]
+
+
+def test_ruling_accepts_ultra_aliases():
+    from glr.agents.chamber import Ruling
+    assert Ruling.model_validate({"verdict": "red"}).light == "red"
+    assert Ruling.model_validate({"verdict": "Not novel - AMBER at best", "summary": "x"}).light == "amber"
