@@ -172,6 +172,20 @@ and vocabulary-mismatch queries, which the "hard" set measures (not run yet).
 **Reranker latency** (40 real passages, M-series Mac): MiniLM-L-12 1.5 s · bge-reranker-base 4.6 s ·
 bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default only on CUDA.
 
+**Other measurements from live runs**
+
+| What | Result |
+|---|---|
+| Credibility, "Attention Is All You Need" | 78/100 strong (77,978 citations, 300 HF models) |
+| Credibility, LLaVA-MoLE before/after bibliometrics fix | 10/100 ("0 citations", data never fetched) → 32/100 (8 citations, author h-index 33) |
+| Paper identity check | fuzzy title match merged "LoRA" with "LoRTA" → now strict; OpenAlex maps LoRA's DOI to an unrelated paper → refused |
+| OpenAlex reference-list coverage (recent arXiv papers) | 5 / 49 → why the graph parses arXiv bibliographies (53 / 60) |
+| Keyless Semantic Scholar | 429 rate-limited → used only with `S2_API_KEY` or as a cooled-down fallback |
+| Context compression (live) | scouts 17.3k → 8.6k tokens, Lead 25.7k → 10.8k (tier-1 elision) |
+| Chat long-term memory (live, 1 turn) | stored 1 decision + 1 preference + 2 findings with [P#] + 1 open question; vectors never sent to the UI |
+| Chat answer before citation normalisation | wrote "(P66)" → 0 claims checked → fixed: normalised to [P66], all checkable |
+| Local reranker first load | ~160 s incl. 2.3 GB model download (bge-reranker-v2-m3), then cached |
+
 **Offline tests**: 22 passing (`make test`): harness (parallel tools, loop detection, review gate, budget-forced
 finish, tier-1/2 compression with tool-call pairing checked on every request, child budgets, chat memory layers),
 credibility, quote verification, citation normalisation, guardrails, strict title identity, graph citation matching
