@@ -1,7 +1,7 @@
 import { FlaskConical, Loader2, Play } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api, type Evals, type ProjectSummary } from './api'
-import { Logo } from './Home'
+import { AppBar } from './Home'
 import { Badge, Button, Card, cx, SectionTitle } from './ui'
 
 function Bar({ v, best }: { v: number; best: boolean }) {
@@ -32,7 +32,7 @@ export default function ProofPage() {
 
   return (
     <div className="min-h-screen">
-      <nav className="flex items-center justify-between border-b border-line px-6 py-3"><Logo /><span className="eyebrow">Proof · measured, not claimed</span></nav>
+      <AppBar><span className="hidden text-sm text-muted sm:inline">Proof: measured, not claimed</span></AppBar>
       <main className="mx-auto max-w-6xl px-6 py-10">
         <h1 className="font-display text-5xl">Retrieval, measured</h1>
         <p className="mt-3 max-w-3xl text-muted">
