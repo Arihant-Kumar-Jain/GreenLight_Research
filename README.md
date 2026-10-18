@@ -74,6 +74,8 @@ No agent framework. `backend/glr/harness/` is a hand-written runtime every agent
 | **Shared blackboard** | `note` writes findings to a project notebook pinned into every agent's prompt |
 | **Chat memory** | pinned project state · long-term facts (Nano-extracted, de-duplicated) · token-budget rolling summary · episodic recall of similar earlier exchanges (Qwen3 embeddings) · in-turn compression |
 | **Self-correction** | chat + report sentences are citation-checked against the cited papers; chat answers with unsupported sentences are revised once and re-checked |
+| **Speaker panel** | 3 × Nemotron Ultra at temperature 0 with different lenses (overall / strict novelty / significance), majority vote; a split panel can't produce GREEN |
+| **Perspective scouts** | every run's round 1 includes "same mechanism, other field or modality" and "skeptical reviewer: is this incremental?" (enforced in code) |
 | **Trace** | every LLM call (provider, model, tokens, latency, cost), tool call, API call, spawn, compression and guardrail → live agent graph in the UI |
 
 ## Credibility score (0–100, deterministic)
@@ -165,6 +167,14 @@ research round is mandatory, the strict judge only downgrades *setting* componen
 domain still counts as fully covered), judges run at temperature 0, and a new guardrail keeps the verdict at least
 AMBER when the review finds every core component covered. Re-run on Nebius: **AMBER**, two rounds, MoLoRA found.
 
+**After the survey quick wins** (Nebius, same idea, `d481c42` + lens panel): 2 rounds, 6 scouts incl. both
+mandatory perspective scouts ("same mechanism, other field", "reviewer: is this incremental?"), 124 papers, MoLoRA
+and LLaVA-MoLE found, comparison table in the report, **AMBER**, 7.0 min, $0.34. The 3-Speaker panel first lost 2 of 3
+votes (Ultra drops the output schema at temperature 0.6); now all three run at temperature 0 with different lenses
+(overall / strict novelty / significance) and return **3/3 AMBER** on that run's debate. One intermediate run (Speaker
+panel broken, round 2 skipped) went RED via the "already done by MixLoRA" guardrail: verdicts sit on the AMBER/RED
+boundary for this idea, never GREEN since the fixes.
+
 **Retrieval eval** (`make eval P=<id>`; 40 synthetic paraphrased questions written from the project's own passages,
 gold = exact source chunk, 180-paper corpus; partial run, the "hard" no-shared-vocabulary set was not run yet):
 
@@ -199,7 +209,7 @@ bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default on
 | Chat answer before citation normalisation | wrote "(P66)" → 0 claims checked → fixed: normalised to [P66], all checkable |
 | Local reranker first load | ~160 s incl. 2.3 GB model download (bge-reranker-v2-m3), then cached |
 
-**Offline tests**: 30 passing (`make test`), incl. Sachit's auth / spend-cap guards: harness (parallel tools, loop detection, review gate, budget-forced
+**Offline tests**: 33 passing (`make test`), incl. Sachit's auth / spend-cap guards: harness (parallel tools, loop detection, review gate, budget-forced
 finish, tier-1/2 compression with tool-call pairing checked on every request, child budgets, chat memory layers),
 credibility, quote verification, citation normalisation, guardrails, strict title identity, graph citation matching
 + clustering, MMR, reranker fallback, gate calibration.

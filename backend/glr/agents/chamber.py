@@ -132,6 +132,15 @@ is weak). Name the 2-4 decisive clashes, the deciding factor, then rule:
 A researcher who gets a false green wastes months. Give concrete differentiation and next steps."""
 
 
+LENS_NAMES = ("overall", "strict novelty", "significance")
+LENSES = ("",
+          "\nYour lens: STRICT NOVELTY. Ask only whether the core contribution already exists in credible prior work.",
+          "\nYour lens: SIGNIFICANCE AND FEASIBILITY. Ask whether pursuing it would produce a result the field values, "
+          "given what exists.")
+FORMAT_RULE = ("\nOutput rule: the field `light` MUST be exactly one of \"green\", \"amber\", \"red\". "
+               "Use exactly the schema's field names.")
+
+
 def _check(args: list[dict], pack: dict) -> None:
     for a in args:
         a["evidence"] = [e.strip("[] ").upper() if e.strip("[] ").upper() in pack else e.strip("[] ")
@@ -211,11 +220,16 @@ async def hold(pid: str, motion: str, pack: dict, on_update=None) -> dict:
 
     async def one(i: int):
         with trace.scope(agent=f"Speaker {i + 1}"):
-            # vote 1 deterministic; votes 2-3 sampled, so the panel shows how robust the call is
-            return await llm.chat_json("judge", SPEAKER, user, Ruling, title=f"Speaker {i + 1}/3: adjudicate and rule",
-                                       max_tokens=6000, temperature=0.0 if i == 0 else 0.6)
-    rulings = [x.model_dump() for x in await asyncio.gather(*(one(i) for i in range(3)), return_exceptions=True)
-               if not isinstance(x, BaseException)]
+            # diversity from the judging lens, not from sampling: at higher temperature Ultra drops the schema
+            return await llm.chat_json("judge", SPEAKER + LENSES[i] + FORMAT_RULE, user, Ruling,
+                                       title=f"Speaker {i + 1}/3 ({LENS_NAMES[i]}): adjudicate and rule",
+                                       max_tokens=6000, temperature=0.0)
+    results = await asyncio.gather(*(one(i) for i in range(3)), return_exceptions=True)
+    for i, x in enumerate(results):
+        if isinstance(x, BaseException):
+            with trace.scope(agent=f"Speaker {i + 1}"):
+                trace.error(f"Speaker {i + 1} gave no valid ruling; panel continues without it", str(x)[:300])
+    rulings = [x.model_dump() for x in results if not isinstance(x, BaseException)]
     if not rulings:
         raise RuntimeError("All Speakers failed")
     votes = [x["light"] for x in rulings]
