@@ -36,6 +36,8 @@ export default function Intake({ id }: { id: string }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState('')
   const [starting, setStarting] = useState(false)
+  // answers to the latest question block, by question index; sent together in one message
+  const [answers, setAnswers] = useState<Record<number, string>>({})
   const end = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,20 +57,25 @@ export default function Intake({ id }: { id: string }) {
 
   useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }) }, [view?.messages.length, view?.busy])
 
+  const msgs = view?.messages ?? []
+  const last = [...msgs].reverse().find((m) => m.role === 'assistant')
+  const ready = !!last?.data?.ready
+  const nAnswered = Object.values(answers).filter((a) => a?.trim()).length
+
   async function send(msg: string) {
-    if (!msg.trim() || view?.busy) return
+    const qs = last?.data?.questions ?? []
+    const answered = qs.map((q, i) => (answers[i]?.trim() ? `${q.question} → ${answers[i].trim()}` : null)).filter(Boolean)
+    const full = [...answered, msg.trim()].filter(Boolean).join('\n')
+    if (!full || view?.busy) return
     setText('')
-    try { setView(await api.intakeSend(id, msg)) } catch (e) { setErr((e as Error).message) }
+    setAnswers({})
+    try { setView(await api.intakeSend(id, full)) } catch (e) { setErr((e as Error).message) }
   }
 
   async function start() {
     setStarting(true)
     try { await api.start(id); go(`/p/${id}/agents`) } catch (e) { setErr((e as Error).message); setStarting(false) }
   }
-
-  const msgs = view?.messages ?? []
-  const last = [...msgs].reverse().find((m) => m.role === 'assistant')
-  const ready = !!last?.data?.ready
 
   return (
     <div className="flex h-screen flex-col">
@@ -92,20 +99,33 @@ export default function Intake({ id }: { id: string }) {
                     ) : null}
                     {m.data?.questions?.length ? (
                       <div className="mt-3 space-y-3 border-t border-line pt-3">
+                        {m.id === last?.id && <div className="text-[11px] text-muted">Pick or type an answer for any questions, then send them together.</div>}
                         {m.data.questions.map((q, i) => (
                           <div key={i}>
                             <div className="text-sm font-medium">{i + 1}. {q.question}</div>
                             {q.why && <div className="text-xs text-muted">{q.why}</div>}
-                            {m.id === last?.id && q.options.length > 0 && (
-                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {m.id === last?.id && (
+                              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                 {q.options.map((o) => (
-                                  <button key={o} onClick={() => send(`${q.question} → ${o}`)} disabled={view?.busy}
-                                    className="rounded-full border border-line px-2.5 py-1 text-xs hover:border-go hover:text-go">{o}</button>
+                                  <button key={o} disabled={view?.busy}
+                                    onClick={() => setAnswers((a) => ({ ...a, [i]: a[i] === o ? '' : o }))}
+                                    className={cx('rounded-full border px-2.5 py-1 text-xs transition',
+                                      answers[i] === o ? 'border-go bg-go-soft text-go' : 'border-line hover:border-go hover:text-go')}>{o}</button>
                                 ))}
+                                <input value={answers[i] && !q.options.includes(answers[i]) ? answers[i] : ''}
+                                  onChange={(e) => setAnswers((a) => ({ ...a, [i]: e.target.value }))}
+                                  placeholder={q.options.length ? 'or type your own…' : 'your answer…'}
+                                  className="min-w-40 flex-1 rounded-full border border-line bg-transparent px-3 py-1 text-xs outline-none focus:border-go/50" />
                               </div>
                             )}
                           </div>
                         ))}
+                        {m.id === last?.id && (
+                          <button onClick={() => send(text)} disabled={!nAnswered || view?.busy}
+                            className="mt-1 rounded-xl bg-go px-3 py-1.5 text-xs font-semibold text-on-go disabled:opacity-30">
+                            Send {nAnswered || ''} answer{nAnswered === 1 ? '' : 's'}
+                          </button>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -121,7 +141,7 @@ export default function Intake({ id }: { id: string }) {
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text) } }}
                 placeholder="Answer, add detail, or say “just start”…"
                 className="flex-1 resize-none rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-go/50" />
-              <button onClick={() => send(text)} disabled={!text.trim() || view?.busy}
+              <button onClick={() => send(text)} disabled={(!text.trim() && !nAnswered) || view?.busy}
                 className="grid h-11 w-11 place-items-center rounded-xl bg-go text-on-go disabled:opacity-30"><ArrowUp size={18} /></button>
             </div>
             {err && <p className="mx-auto mt-2 max-w-3xl text-sm text-stop">{err}</p>}
