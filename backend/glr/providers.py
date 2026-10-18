@@ -1,10 +1,8 @@
-"""LLM providers as plug-ins. Every agent talks to llm.py; llm.py talks to whichever provider is active here.
+"""LLM provider: Nebius Token Factory serves every model (Nemotron 3 Nano / Super / Ultra, Qwen3-Embedding-8B).
 
-Both providers speak the OpenAI API and serve the same open models (Nemotron Nano / Super / Ultra, Qwen3 embeddings),
-so switching changes the endpoint, key, catalog and a few request details, never the agent code.
-
-Choice: GLR_LLM_PROVIDER=nebius|openrouter, or empty = auto (Nebius when NEBIUS_API_KEY is set, else OpenRouter).
-Adding a provider: subclass Provider, implement the hooks that differ, register it in PROVIDERS.
+Every agent talks to llm.py; llm.py talks to the provider here through the OpenAI-compatible API. NEBIUS_BASE_URL can
+point the same client at our own vLLM server on the Nebius GPU. Adding a provider: subclass Provider, register it in
+PROVIDERS.
 """
 
 from dataclasses import dataclass
@@ -61,29 +59,8 @@ class Nebius(Provider):
         return await self._get_models("/models", {"verbose": "true"})
 
 
-class OpenRouter(Provider):
-    @property
-    def api_key(self) -> str:
-        return settings.openrouter_api_key
-
-    def headers(self) -> dict[str, str]:
-        return {"HTTP-Referer": settings.public_base_url, "X-Title": "GreenLight Research"}
-
-    def thinking_body(self, on: bool) -> dict[str, Any]:
-        return {"reasoning": {"enabled": on}}
-
-    def request_body(self) -> dict[str, Any]:
-        # Route only to upstreams that support every parameter we send (JSON mode, tools, reasoning switch).
-        return {"provider": {"require_parameters": True}}
-
-    async def catalog(self) -> dict[str, dict]:
-        # Chat and embedding models are listed separately on OpenRouter.
-        return {**await self._get_models("/models"), **await self._get_models("/embeddings/models")}
-
-
 PROVIDERS: dict[str, Provider] = {
     "nebius": Nebius("nebius", "Nebius Token Factory", settings.nebius_base_url, "NEBIUS_API_KEY"),
-    "openrouter": OpenRouter("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
 }
 
 

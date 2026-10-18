@@ -1,14 +1,13 @@
 """LLM client: model routing, JSON outputs, embeddings, cost trace. (The tool loop lives in harness/agent.py.)
 
-The endpoint comes from the active provider plug-in (providers.py): Nebius Token Factory, or OpenRouter as a
-stand-in with the same open models. Agents never see which one is used.
+Every model runs on Nebius Token Factory (providers.py); agents only ask for a role.
 
 Model roles (larger and smaller models working together):
   fast   - Nemotron Nano class: high-volume work (scouts' triage, paper audits, quote checks, context compression)
   reason - Nemotron Super class: multi-step agents (lead researcher, scouts, novelty mapping, Chamber speakers, chat)
   judge  - Nemotron Ultra class: the Speaker's green/amber/red ruling, where judgment matters most
   embed  - Qwen3 Embedding 8B: dense retrieval over the paper corpus
-Roles resolve against the active provider's live catalog unless pinned in .env.
+Roles resolve against Token Factory's live model catalog unless pinned in .env.
 """
 
 import asyncio
@@ -101,7 +100,7 @@ def _pick(ids: list[str], role: str) -> str | None:
             hits = [i for i in hits if not any(x in i.lower() for x in NOT_CHAT)]
         if hits:
             # Prefer the base flavour over "-fast" for reasoning roles, and the fast flavour for "fast".
-            # ":free" variants (OpenRouter) only when GL_PREFER_FREE_MODELS=1.
+            # ":free" variants only when GLR_PREFER_FREE_MODELS=1.
             hits.sort(key=lambda i: (i.endswith(":free") != settings.prefer_free_models,
                                      ("-fast" in i.lower()) != (role == "fast"), len(i)))
             return hits[0]

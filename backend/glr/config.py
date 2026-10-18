@@ -37,7 +37,6 @@ class Settings:
     # ---- LLM provider plug-in (providers.py). Nebius wins when both keys are set.
     nebius_api_key: str = field(default_factory=lambda: _env("NEBIUS_API_KEY"))
     nebius_base_url: str = field(default_factory=lambda: _env("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1/"))
-    openrouter_api_key: str = field(default_factory=lambda: _env("OPENROUTER_API_KEY"))
     llm_provider: str = field(default_factory=lambda: _env("GLR_LLM_PROVIDER"))
     prefer_free_models: bool = field(default_factory=lambda: _env("GLR_PREFER_FREE_MODELS") == "1")
     # Model roles; empty = auto-pick from the provider's live catalog (llm.resolve_models).

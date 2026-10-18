@@ -82,7 +82,7 @@ docker compose logs -f
 Production `.env` (start from `.env.example`):
 
 ```bash
-NEBIUS_API_KEY=...            # only this LLM key: no OPENROUTER_API_KEY, so every call goes to Token Factory
+NEBIUS_API_KEY=...            # Token Factory serves every model
 TAVILY_API_KEY=...
 OPENALEX_API_KEY=... / OPENALEX_MAILTO=...    # strongly recommended (shared keyless budget is tiny)
 GOOGLE_CLIENT_ID=....apps.googleusercontent.com

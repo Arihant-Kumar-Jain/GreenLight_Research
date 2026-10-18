@@ -229,7 +229,7 @@ async def hold(pid: str, motion: str, pack: dict, on_update=None) -> dict:
 
     async def one(i: int):
         with trace.scope(agent=f"Speaker {i + 1}"):
-            # diversity from the judging lens, not from sampling: at higher temperature Ultra drops the schema
+            # diversity from the judging lens, not from sampling: temperature 0 keeps structured output reliable
             return await llm.chat_json("judge", SPEAKER + LENSES[i] + FORMAT_RULE, user, Ruling,
                                        title=f"Speaker {i + 1}/3 ({LENS_NAMES[i]}): adjudicate and rule",
                                        max_tokens=6000, temperature=0.0)

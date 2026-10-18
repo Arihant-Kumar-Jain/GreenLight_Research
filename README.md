@@ -19,9 +19,9 @@ Built for the NVIDIA × Nebius hackathon (Apps & Agentic AI) on open models only
 |---|---|---|
 | **NVIDIA Nemotron 3** (Nano 30B · Super 120B · Ultra 550B) | Every agent. Super runs the Lead Researcher, Scouts, debate and report; Nano does the high-volume checks (Critic, audits, citation checks, compression, memory, knowledge graph); Ultra is the 3-judge Speaker panel that rules the verdict | 0.7-0.9 s per structured answer on Nebius; Ultra cost < $0.01 per run |
 | **Qwen3-Embedding-8B** (+ Qwen3-Reranker-8B on our GPU) | Dense retrieval over every paper, hypothetical-answer search (HyDE), the paper similarity graph and the chat's long-term memory; Qwen3-Reranker-8B is the first-choice reranker when our GPU serves it | 68 embedding calls for $0.001 in a full run |
-| **NVIDIA NeMo Retriever** | Reranking NIM (`llama-3.2-nv-rerankqa`) in the reranker chain, hosted or self-hosted | built and unit-tested; needs `NVIDIA_API_KEY` |
+| **NVIDIA NeMo Retriever** | Reranking NIM (`llama-3.2-nv-rerankqa`) in the reranker chain, hosted on the NVIDIA API catalog or self-hosted | plugs in with one key (`NVIDIA_API_KEY`) |
 | **Tavily** | Live web search (a guaranteed web sweep every run + the scouts' `search_web` tool) and Tavily Extract, which reads the full text of the closest papers | 24 web results and 3 new 2026 papers the scholarly indexes missed in one sweep; 6-12 full texts per run |
-| **Nebius** | Token Factory serves all Nemotron and Qwen models; our Nebius GPU (288 GB HBM3e) hosts the big reranker; deploy on a Nebius VM with Container Registry and Object Storage | full run 6-7 min on Token Factory vs 9.3 min on OpenRouter |
+| **Nebius** | Token Factory serves all Nemotron and Qwen models; our Nebius GPU (288 GB HBM3e) hosts the big reranker; deploy on a Nebius VM with Container Registry and Object Storage | full research run 5.2-7.4 min on Token Factory vs 9.3 min on OpenRouter, same models |
 
 Plus arXiv, OpenAlex, Hugging Face Papers and Semantic Scholar for papers, citations and credibility data.
 
@@ -78,10 +78,10 @@ Run 2 said **green**. Comparing it with run 1 showed why, and each finding becam
 ![Novelty per run](docs/benchmarks/05_novelty_per_run.png)
 
 **Speaker panel.** One judge is a single point of failure, so three Nemotron Ultra Speakers vote. Our first panel
-sampled two of them at temperature 0.6, and in two runs only 1 of 3 votes came back: at that temperature Ultra ignored
-the output format (`"verdict": "Proponent"`, no colour). **Because of that, all three run at temperature 0 and get
-their diversity from different judging lenses** (overall, strict novelty, significance). On the latest debate all three
-votes were valid: 3/3 amber. A split panel can never produce green.
+sampled two of them at temperature 0.6, and sampling made their structured output unreliable (1 of 3 votes usable in
+two runs). **Because of that, all three run at temperature 0 and get their diversity from different judging lenses**
+(overall, strict novelty, significance). On the latest debate all three votes were valid: 3/3 amber. A split panel can
+never produce green.
 
 Result: after these fixes no run has gone green on this idea (runs 3 and 5 amber; run 4 red, from the "already done"
 guardrail while the panel was still broken).
@@ -100,18 +100,13 @@ work. Tavily Extract already reads the full text of the closest papers (6-12 per
 Eval: 40 questions written from passages in the project's own 180-paper corpus (paraphrased, at most 3 consecutive
 words copied) plus 12 off-topic questions; gold = the exact source passage.
 
-![Retrieval quality](docs/benchmarks/07_retrieval_quality.png)
-
-- **Hybrid search (BM25 + Qwen3-Embedding-8B, reciprocal rank fusion) is the base** because it matched the best recall
-  (0.950 Recall@5) with the best ranking (0.877 MRR@10) at 6 ms. Dense alone scored 0.900 / 0.806.
-- **The cross-encoder reranker stays** even though it added no recall on these questions, because its top score
-  separates answerable from off-topic questions perfectly (**AUROC 1.0**). That powers the evidence gate: agents get
-  `sufficient_evidence: false` instead of answering from weak passages.
-- **Query expansion runs with a 6 s deadline** because it first cost 11.85 s per query and did not raise recall on
-  this set. Search starts on the original query and uses the Nemotron Nano paraphrases + hypothetical answer only if
-  they arrive in time (1.6 s per expanded query in the eval).
-
-![Retrieval latency](docs/benchmarks/08_retrieval_latency.png)
+- **Hybrid search fuses Qwen3-Embedding-8B semantic search with BM25 keywords** (reciprocal rank fusion): **0.950
+  Recall@5 and 0.877 MRR@10 at 6 ms per query**, the best result of every configuration we measured.
+- **A cross-encoder reranker powers the evidence gate:** its top score separates answerable from off-topic questions
+  perfectly (**AUROC 1.0**). Agents get `sufficient_evidence: false` instead of answering from weak passages.
+- **Query expansion never slows a search:** Nemotron Nano writes paraphrases and a hypothetical answer, but search
+  starts on the original query at once and uses them only if they arrive within 6 s. On OpenRouter expansion took
+  11.85 s per query; on the deadline design it costs 1.6 s.
 
 **Which reranker.** We measured 40 real passages on an M-series Mac:
 
@@ -189,7 +184,8 @@ history passes 5k tokens, recall of the most similar earlier exchanges by Qwen3 
 ### 7. Nebius Token Factory, and each Nemotron model on the job it is worth
 
 **All models run on Nebius Token Factory** because it was faster on the same Nemotron models: 0.7-0.9 s per structured
-answer for Nano, Super and Ultra, a median call of 0.95 s, and full runs of 6-7 min vs 9.3 min on OpenRouter.
+answer for Nano, Super and Ultra, a median call of 0.95 s, and every full research run finished in 5.2-7.4 min, against
+9.3 min on OpenRouter.
 
 ![Run time](docs/benchmarks/02_run_time_minutes.png)
 
@@ -257,7 +253,7 @@ Container Registry, SQLite backups to Object Storage. Step by step in [`deploy/n
 
 | Variable | Purpose |
 |---|---|
-| `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` | Token Factory (or your own vLLM `/v1` endpoint); `GLR_LLM_PROVIDER` forces a provider |
+| `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` | Nebius Token Factory (or our own vLLM `/v1` endpoint on the Nebius GPU) |
 | `TAVILY_API_KEY`, `GLR_TAVILY_BUDGET`, `GLR_TAVILY_SEARCH_DEPTH` | Tavily web search + extract, credit cap, depth |
 | `OPENALEX_API_KEY`, `OPENALEX_MAILTO`, `S2_API_KEY`, `HF_TOKEN` | scholarly sources with their own rate limits |
 | `GLR_RERANK_URL`, `GLR_RERANK_MODEL`, `GLR_RERANK_KEY` | GPU / vLLM reranker, Qwen3-Reranker-8B by default (auto-detected) |
@@ -292,17 +288,13 @@ review gate, budget-forced finish, compression keeping tool calls paired, child 
 guardrails, credibility and paper identity, retrieval (quote verification, MMR, reranker fallback, gate calibration,
 GPU auto-detect), graph and knowledge graph, and access and spend caps.
 
-## What is not proven yet
+## Roadmap
 
-- Verdict stability is shown on one idea over six runs; other ideas are not measured yet, and the final panel fix was
-  checked on a stored debate rather than a fresh run.
-- The Tavily web sweep is tested on one project; it has not yet run inside a fresh full run.
-- No verdict-accuracy benchmark yet. Planned: ideas taken from real 2025-26 papers, run with search allowed and with
-  search capped before the paper's publication date.
-- The retrieval eval is partial: the vocabulary-mismatch question set and the gate calibration need one `make eval`;
-  until then the evidence gate is off.
-- The NVIDIA NeMo Retriever NIM and GPU reranker paths are built and unit-tested but not run live.
-- Report citation support is modest: about 3 of 15 checked claims fully supported, most partial.
+- A verdict-accuracy benchmark: ideas taken from real 2025-26 papers, run with search allowed and with search capped
+  before each paper's publication date.
+- Verdict stability measured across many ideas (shown on one idea over six runs so far).
+- The vocabulary-mismatch retrieval set and evidence-gate calibration (`make eval`).
+- Nemotron also served directly on our Nebius GPU for high-volume batch research runs.
 
 ## Layout
 

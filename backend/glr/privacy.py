@@ -144,7 +144,7 @@ def scrub_secrets(text: str | None, _count=None) -> str:
     """Remove the configured API keys (and anything shaped like a bearer token) from a string."""
     if not text:
         return text or ""
-    for key in (settings.nebius_api_key, settings.openrouter_api_key, settings.tavily_api_key,
+    for key in (settings.nebius_api_key, settings.tavily_api_key,
                 settings.openalex_api_key, settings.s2_api_key, settings.hf_token, settings.nvidia_api_key,
                 settings.rerank_key):
         if key and len(key) >= 8 and key in text:
