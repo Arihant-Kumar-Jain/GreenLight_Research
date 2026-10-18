@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import db, llm, papers, pipeline, privacy, providers, web
+from . import db, graph, llm, papers, pipeline, privacy, providers, web
 from .agents import chat, intake
 from .config import REPO_DIR, missing_keys, settings
 from .privacy import scrub_secrets
@@ -189,6 +189,35 @@ async def score_paper(pid: str, paper_id: str):
 async def get_trace(pid: str, after: int = 0):
     _project_or_404(pid)
     return {"events": db.trace(pid, after), "totals": db.trace_totals(pid)}
+
+
+# ---------------------------------------------------------------- paper relationship graph
+
+_graph_locks: dict[str, asyncio.Lock] = {}
+
+
+@app.get("/api/projects/{pid}/graph")
+async def get_graph(pid: str, refresh: bool = False):
+    _project_or_404(pid)
+    key = f"graph:{pid}:{len(db.papers(pid))}"
+    async with _graph_locks.setdefault(pid, asyncio.Lock()):
+        if not refresh and (hit := db.cache_get(key)) is not None:
+            return hit
+        g = await graph.build(pid)
+        db.cache_put(key, g)
+        return g
+
+
+class Pair(BaseModel):
+    a: str
+    b: str
+    facts: str = ""
+
+
+@app.post("/api/projects/{pid}/graph/explain")
+async def explain_pair(pid: str, body: Pair):
+    _project_or_404(pid)
+    return {"text": await graph.explain(pid, body.a.upper(), body.b.upper(), body.facts[:600])}
 
 
 # ---------------------------------------------------------------- research chat (to-and-fro)

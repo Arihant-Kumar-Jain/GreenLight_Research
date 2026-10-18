@@ -79,3 +79,18 @@ def test_bracket_citations():
 def test_unknown_citations_are_not_zero():
     r = credibility.score({**WEAK, "citations": None, "openalex_id": None})
     assert r["components"][0]["score"] == 25 and r["confidence"] == "low"
+
+
+def test_graph_cites_and_clusters():
+    import numpy as np
+    from glr import graph
+    nodes = [
+        {"id": "P1", "title": "Mixture of LoRA Experts for Multi Task Tuning", "arxiv_id": "2401.00001",
+         "refs": [{"arxiv": "2106.09685", "text": ""}], "refs_via": "arXiv bibliography"},
+        {"id": "P2", "title": "LoRA: Low-Rank Adaptation of Large Language Models", "arxiv_id": "2106.09685", "refs": []},
+        {"id": "P3", "title": "Sparse experts", "refs": [{"text": "X et al. Mixture of LoRA Experts for Multi Task Tuning. 2024"}]},
+    ]
+    edges = graph._cite_edges(nodes)
+    assert {(e["source"], e["target"]) for e in edges} == {("P1", "P2"), ("P3", "P1")}
+    assign, clusters = graph._clusters(nodes, edges)
+    assert len(set(assign.values())) == 1 and clusters[0]["size"] == 3

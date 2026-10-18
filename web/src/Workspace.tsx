@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Sparkles } from 'lucide-react'
+import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Share2, Sparkles } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Project, type TraceEvent } from './api'
 import { Logo } from './Home'
@@ -10,6 +10,7 @@ import ChatView from './views/ChatView'
 import NoveltyView from './views/NoveltyView'
 import PapersView, { PaperDrawer } from './views/PapersView'
 import ReportView from './views/ReportView'
+import GraphView from './views/GraphView'
 
 const PaperGalaxy = lazy(() => import('./three/PaperGalaxy'))
 
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'overview', label: 'Verdict', icon: Sparkles },
   { id: 'agents', label: 'Agents (live)', icon: Bot },
   { id: 'galaxy', label: 'Paper galaxy', icon: Orbit },
+  { id: 'graph', label: 'Relationship graph', icon: Share2 },
   { id: 'papers', label: 'Papers', icon: BookOpen },
   { id: 'novelty', label: 'Novelty matrix', icon: Grid3x3 },
   { id: 'chamber', label: 'Chamber', icon: Scale },
@@ -109,7 +111,7 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
             <SectionTitle>Novelty score</SectionTitle>
             <div className="font-display text-6xl">{p.novelty.score ?? '–'}<span className="text-2xl text-muted">/100</span></div>
             <p className="mt-2 text-xs text-muted">Share of the idea's components (core weighted ×2) not covered by prior work, counting only overlaps backed by a verified quote.</p>
-            {p.novelty.already_done_by.length > 0 && <p className="mt-3 text-sm text-stop">Covers every core component: <Markdown className="inline [&_p]:inline" text={`[${p.novelty.already_done_by.map((d) => d.paper_id).join(', ')}]`} /></p>}
+            {p.novelty.already_done_by.length > 0 && <div className="mt-3 text-sm text-stop">Covers every core component: <Markdown className="inline [&_p]:inline" text={`[${p.novelty.already_done_by.map((d) => d.paper_id).join(', ')}]`} /></div>}
           </Card>
         )}
         {p.plan && (
@@ -169,7 +171,10 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
       setP(proj)
       if (tr.events.length) {
         cursor.current = tr.events[tr.events.length - 1].id
-        setEvents((ev) => [...ev, ...tr.events].slice(-3000))
+        setEvents((ev) => {
+          const seen = new Set(ev.map((e) => e.id))
+          return [...ev, ...tr.events.filter((e) => !seen.has(e.id))].slice(-3000)
+        })
       }
     } catch (e) { setErr((e as Error).message) }
   }, [id])
@@ -205,7 +210,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
             <div className="eyebrow mb-2">{p.brief?.field || 'Research idea'}</div>
             <h1 className="font-display text-4xl leading-tight">{p.title || p.brief?.title || p.idea_text.slice(0, 80)}</h1>
             {v ? (
-              <p className={cx('mt-3 max-w-3xl text-lg', LIGHT[v.light].text)}><Markdown text={v.headline} className="[&_p]:m-0" /></p>
+              <div className={cx('mt-3 max-w-3xl text-lg', LIGHT[v.light].text)}><Markdown text={v.headline} className="[&_p]:m-0" /></div>
             ) : (
               <p className="mt-3 text-muted">{p.status === 'error' ? `Failed: ${p.error}` : p.running ? 'The agents are researching. Watch them in Agents (live).' : 'Not started.'}</p>
             )}
@@ -243,6 +248,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
               </div>
             </div>
           )}
+          {tab === 'graph' && <GraphView p={p} onOpen={setDrawer} />}
           {tab === 'papers' && <PapersView p={p} onOpen={setDrawer} />}
           {tab === 'novelty' && <NoveltyView p={p} />}
           {tab === 'chamber' && <ChamberView p={p} />}

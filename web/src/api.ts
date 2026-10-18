@@ -91,6 +91,19 @@ export type Health = {
   models?: Record<string, { id: string; name: string } | string>; models_error?: string
 }
 
+export type GraphNode = {
+  id: string; title: string; year: number | null; citations: number | null; credibility: number | null
+  cluster: number; relation: string | null; refs_via: string | null; n_refs: number
+}
+export type GraphEdge = {
+  source: string; target: string; type: 'cites' | 'similar' | 'idea'; weight?: number; via?: string | null
+  evidence?: string; relation?: string
+}
+export type GraphData = {
+  nodes: GraphNode[]; edges: GraphEdge[]; clusters: { id: number; label: string; size: number }[]
+  idea: { title: string }; stats: { cites: number; similar: number; refs_via: Record<string, number> }
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...init })
   if (!r.ok) {
@@ -119,5 +132,7 @@ export const api = {
   chat: (id: string) => req<{ messages: Message[]; busy: boolean }>(`/api/projects/${id}/chat`),
   chatSend: (id: string, text: string) => post<{ messages: Message[]; busy: boolean }>(`/api/projects/${id}/chat`, { text }),
   scorePaper: (id: string, pid: string) => post<Paper>(`/api/projects/${id}/papers/${pid}/score`),
+  graph: (id: string, refresh = false) => req<GraphData>(`/api/projects/${id}/graph${refresh ? '?refresh=1' : ''}`),
+  explain: (id: string, a: string, b: string, facts: string) => post<{ text: string }>(`/api/projects/${id}/graph/explain`, { a, b, facts }),
   redact: (text: string) => post<{ text: string; found: { type: string; label: string; count: number }[] }>('/api/redact', { text }),
 }

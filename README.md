@@ -68,6 +68,12 @@ Retracted → 0. Papers < 18 months old get their impact weight moved to authors
 being punished for missing citations. Identity is verified: OpenAlex records are accepted only if the title matches
 (OpenAlex maps LoRA's DOI to an unrelated paper; we refuse it and fall back to Semantic Scholar).
 
+## Retrieval (honest status)
+
+Hybrid BM25 + Qwen3-Embedding-8B with reciprocal rank fusion over abstracts and read full texts. **No reranker yet**
+(OpenRouter lists no reranker models; options: local `bge-reranker-v2-m3`, Nemotron Nano as reranker, or a Nebius-hosted
+NVIDIA reranker), no relevance cutoff for abstention, and no retrieval eval yet.
+
 ## Invariants (the pitch)
 
 1. **Redact before anything leaves the machine** (`privacy.py`, ported from GreenLight): ideas, chat messages and every
@@ -90,6 +96,8 @@ make check                # tsc + vite build + oxlint + import check + tests
 
 UI: landing (three.js idea-in-a-galaxy hero) → intake chat with quick replies and a live brief → workspace tabs:
 **Verdict** · **Agents (live)** (agent graph + trace) · **Paper galaxy** (3D, orbit = closeness, colour = credibility)
+· **Relationship graph** (3D force graph: citation links with the reference line as proof, embedding similarity,
+auto-clusters, "explain how these two relate")
 · **Papers** (credibility breakdowns, audits, links) · **Novelty matrix** (verified quotes) · **Chamber** (3D chamber +
 transcript) · **Report** (citation check) · **Chat** · **Notebook**.
 

@@ -116,11 +116,21 @@ export default function PaperGalaxy({ papers, closest, light, onOpen, className 
     const ndc = new THREE.Vector2(9, 9)
     let hovered: string | null = null
     const canvas = renderer.domElement
-    const down = (e: PointerEvent) => { dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId) }
+    const down = (e: PointerEvent) => { dragging = true; moved = 0; lastX = e.clientX; lastY = e.clientY; try { canvas.setPointerCapture(e.pointerId) } catch { /* synthetic pointer */ } }
+    // click/tap does its own hit test: touch screens never hover, and the loop pauses off-screen
+    const pick = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const p = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
+      ray.setFromCamera(p, camera)
+      return (ray.intersectObjects(bodies.map((b) => b.mesh), false)[0]?.object.userData.id as string | undefined) ?? null
+    }
     const up = (e: PointerEvent) => {
       dragging = false
-      canvas.releasePointerCapture(e.pointerId)
-      if (moved < 5 && hovered) openRef.current(hovered)
+      try { canvas.releasePointerCapture(e.pointerId) } catch { /* not captured */ }
+      if (moved < 5) {
+        const id = pick(e)
+        if (id) openRef.current(id)
+      }
     }
     const move = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect()

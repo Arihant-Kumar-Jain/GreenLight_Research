@@ -11,7 +11,7 @@ One Budget caps the whole run (GLR_MAX_USD_PER_RUN); stage progress is written t
 import asyncio
 import traceback
 
-from . import db, papers, trace
+from . import db, graph, papers, trace
 from .budget import Budget
 from .config import settings
 from .agents import auditor, chamber, novelty, planner, research, verdict, writer
@@ -81,6 +81,10 @@ async def run(pid: str) -> None:
             db.update_project(pid, debate=debate, verdict=v, stage="report")
 
             report = await writer.write(pid, brief, review, nov, v)
+            try:  # the relationship graph is a view; it must never fail the run
+                db.cache_put(f"graph:{pid}:{len(db.papers(pid))}", await graph.build(pid))
+            except Exception as e:
+                trace.error("Paper graph failed", str(e)[:300])
             totals = db.trace_totals(pid)
             db.update_project(pid, report=report, status="done", stage="done",
                               stats={"review": review, "budget": budget.snapshot(), "totals": totals})

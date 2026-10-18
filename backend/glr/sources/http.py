@@ -15,7 +15,7 @@ import httpx
 from .. import db, trace
 
 UA = "GreenLightResearch/0.1 (deep research assistant; hackathon project)"
-PACE_S = {"export.arxiv.org": 3.1, "api.semanticscholar.org": 1.1, "api.openalex.org": 0.12, "huggingface.co": 0.2}
+PACE_S = {"export.arxiv.org": 3.1, "api.semanticscholar.org": 1.1, "api.openalex.org": 0.12, "huggingface.co": 0.2, "arxiv.org": 1.0}
 COOLDOWN_S = 300
 
 _last: dict[str, float] = {}

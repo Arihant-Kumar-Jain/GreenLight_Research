@@ -5,6 +5,32 @@ For each change: what, why, new env vars, how to test, open TODOs.
 
 ---
 
+## 2026-10-18 (later) — Arihant (with Claude): paper relationship graph
+
+**What.** New workspace tab **Relationship graph** (`backend/glr/graph.py`, `web/src/three/PaperGraph.tsx`,
+`views/GraphView.tsx`): a 3D force-directed graph of the ~60 most relevant papers plus the idea.
+- **cites** edges come from reference lists: Semantic Scholar batch (only with `S2_API_KEY`), then OpenAlex
+  `referenced_works`, then the paper's own bibliography parsed from its arXiv HTML page (matched by arXiv id or an exact
+  title of 5+ words). Every edge keeps the reference line as evidence. Why the fallbacks: in the live project OpenAlex
+  had reference lists for only 5 of 49 recent preprints and keyless S2 answered 429; the arXiv bibliographies gave
+  53/60 papers' references → 36 citation links.
+- **similar** edges: nearest neighbours of the Qwen3 abstract embeddings, threshold = 88th percentile of pairwise cosine.
+- **idea** edges: the Lead Researcher's relation (same idea / very close / related).
+- **Clusters**: weighted label propagation over cites + similar, labelled by distinctive title words (no LLM).
+- **Explain**: `POST /api/projects/{id}/graph/explain` asks Nemotron Nano how two papers relate (cached).
+- UI: particles flow citing → cited, colour by cluster or credibility, edge-type toggles, click a cluster to focus it,
+  click a paper to list who it cites / who cites it / what it resembles, each with evidence and an Explain button.
+- The graph is built at the end of each run (non-fatal) and cached; `GET .../graph?refresh=1` rebuilds it.
+- Fixed while testing: 3D clicks relied on hover state from the render loop, so taps on touch screens never selected
+  anything (now hit-tested on click, also in Paper galaxy); duplicate trace events under StrictMode; `<div>` inside `<p>`.
+
+**Test.** `make test` (17, incl. citation matching + clustering). Live: open a finished project → Relationship graph.
+
+**TODO.** No reranker yet (see README "Retrieval"); arXiv HTML exists only for papers from ~Dec 2023 on, older papers
+need S2/OpenAlex references.
+
+---
+
 ## 2026-10-18 — Arihant (with Claude): GreenLight Research v0.1, from scratch
 
 **What.** New project next to GreenLight, for research ideas instead of startup ideas. Reuses GreenLight's stack
