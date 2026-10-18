@@ -5,6 +5,27 @@ For each change: what, why, new env vars, how to test, open TODOs.
 
 ---
 
+## 2026-10-18 (night, later) — Sachit (with Claude): intake answers all questions at once; research metrics instead of cost
+
+**What.**
+- **Intake follow-ups** (`Intake.tsx`): clicking an option used to send that one answer immediately, so the other
+  questions were dropped and asked again in the next turn. Now options are selectable (highlighted), every question
+  also has a "type your own answer" field, and one **Send answers** button activates only when every question has an
+  answer. It sends one message with each numbered question and its answer. Free text typed in the main box also
+  carries any answers already picked.
+- **Research metrics instead of operator metrics** (`research.ts`): the Agents (live) header, the per-agent labels,
+  the Overview "Research so far" box and the chat answer footer now show papers found / relevant (cross-encoder
+  relevance ≥ 40%) / read in full / credibility scored (strong), passages retrieved, literature searches, findings
+  and gaps noted, and papers cited per chat answer. LLM calls, tool calls, tokens and dollars are no longer shown (the
+  trace still records them; the backend is unchanged). Passages are counted from the `search_corpus` /
+  `read_fulltext` trace digests ("N passage(s) from …"); per-agent papers come from `found_by`.
+
+**Test.** `make check`. Checked in the browser on a real intake (two questions: one picked, one typed, sent together
+in one message) and a short live run (header showed 30 papers / 5 relevant / 1 read / 15 searches / 1 finding; scout
+labels "17 papers · 5 searches"; no $ or token figures on the page).
+
+---
+
 ## 2026-10-18 (merge) — Sachit (with Claude): feat/auth-deploy-landing merged with Arihant's retrieval/chat work
 
 - New upstream routes now need the owner like every other project route: `POST /api/projects/{id}/stop`,

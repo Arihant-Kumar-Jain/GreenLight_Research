@@ -1,6 +1,7 @@
 import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Network, Share2, Sparkles, Square } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Project, type TraceEvent } from './api'
+import { RELEVANT, researchStats } from './research'
 import { GoogleButton, useAuth, UserMenu } from './auth'
 import { Logo } from './Home'
 import TrafficLight from './TrafficLight'
@@ -51,6 +52,7 @@ function Stepper({ p }: { p: Project }) {
 }
 
 function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
+  const r = researchStats(p, events)
   const v = p.verdict
   const review = p.stats?.review
   const latest = events.filter((e) => ['info', 'guard', 'spawn', 'done'].includes(e.kind)).slice(-6).reverse()
@@ -138,16 +140,17 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
           </Card>
         )}
         <Card className="p-6">
-          <SectionTitle>Run</SectionTitle>
+          <SectionTitle>Research so far</SectionTitle>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <Stat k="Papers" v={p.papers.length} /><Stat k="Agents" v={p.totals.agents} />
-            <Stat k="LLM calls" v={p.totals.llm_calls} /><Stat k="Tool calls" v={p.totals.tool_calls} />
-            <Stat k="Compressions" v={p.totals.compressions} /><Stat k="Cost" v={`$${p.totals.cost_usd.toFixed(3)}`} />
+            <Stat k="Papers found" v={r.papers} /><Stat k={`Relevant (≥${Math.round(RELEVANT * 100)}%)`} v={r.relevant} />
+            <Stat k="Read in full" v={r.read} /><Stat k="Credibility scored" v={`${r.scored}${r.strong ? ` (${r.strong} strong)` : ''}`} />
+            <Stat k="Passages retrieved" v={r.passages} /><Stat k="Literature searches" v={r.searches} />
+            <Stat k="Findings noted" v={r.findings} /><Stat k="Gaps noted" v={r.gaps} />
+            {r.retracted > 0 && <Stat k="Retracted, flagged" v={r.retracted} />}
+            <Stat k="Agents" v={p.totals.agents} />
           </div>
           {p.totals.by_model.length > 0 && (
-            <div className="mt-4 space-y-1 text-xs text-muted">
-              {p.totals.by_model.map((m) => <div key={m.model} className="flex justify-between gap-2"><span className="truncate">{m.model}</span><span>{m.calls} calls · ${m.cost.toFixed(4)}</span></div>)}
-            </div>
+            <p className="mt-4 text-xs text-muted">Models: {p.totals.by_model.map((m) => m.model).filter(Boolean).join(', ')}</p>
           )}
         </Card>
       </div>

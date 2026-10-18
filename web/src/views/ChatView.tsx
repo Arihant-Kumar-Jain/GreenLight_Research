@@ -1,6 +1,7 @@
-import { ArrowUp, Cpu, Wrench } from 'lucide-react'
+import { ArrowUp, BookOpen } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api, type Message, type Project, type TraceEvent } from '../api'
+import { plural } from '../research'
 import { Card, cx, Markdown, Typing } from '../ui'
 
 const STARTERS = [
@@ -71,10 +72,8 @@ export default function ChatView({ p, events, onBusy }: { p: Project; events: Tr
               {m.role === 'user' ? <div className="whitespace-pre-wrap">{m.content}</div> : <Markdown text={m.content} />}
               {m.role === 'assistant' && m.data?.steps != null && (
                 <div className="mt-3 flex flex-wrap gap-3 border-t border-line pt-2 text-[11px] text-muted">
-                  <span className="inline-flex items-center gap-1"><Cpu size={11} />{m.data.steps} step(s)</span>
-                  <span className="inline-flex items-center gap-1"><Wrench size={11} />{m.data.tool_calls} tool call(s)</span>
-                  {m.data.budget && <span>${m.data.budget.usd.toFixed(4)} · {m.data.budget.elapsed_s}s</span>}
-                  {m.data.context && m.data.context.compressions > 0 && <span>context compressed ×{m.data.context.compressions}</span>}
+                  <span className="inline-flex items-center gap-1"><BookOpen size={11} />{plural(m.data.papers?.length ?? 0, 'paper')} cited</span>
+                  {m.data.budget && <span>answered in {Math.round(m.data.budget.elapsed_s)}s</span>}
                   {m.data.recalled ? <span>recalled {m.data.recalled} earlier exchange(s)</span> : null}
                   {m.data.citations?.revised_from ? <span className="text-wait">self-corrected: {m.data.citations.revised_from} unsupported → {m.data.citations.unsupported}</span> : null}
                   {m.data.citations && <span>citations checked: {m.data.citations.supported} supported{m.data.citations.partial ? `, ${m.data.citations.partial} partial` : ''}{m.data.citations.unsupported ? `, ${m.data.citations.unsupported} unsupported` : ''}</span>}

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { Project, TraceEvent } from '../api'
+import { agentStats, plural, researchStats } from '../research'
 import { Badge, Card, cx, SectionTitle, type Tone } from '../ui'
 
-type Node = { name: string; parent: string | null; llm: number; tools: number; cost: number; tokens: number; last: number; first: number; done: boolean; depth: number; x: number; y: number }
+type Node = { name: string; parent: string | null; last: number; first: number; done: boolean; depth: number; x: number; y: number }
 
 const KIND: Record<string, { tone: Tone; label: string }> = {
   llm: { tone: 'info', label: 'LLM' }, tool: { tone: 'go', label: 'TOOL' }, source: { tone: 'neutral', label: 'API' },
@@ -24,12 +25,10 @@ function buildGraph(events: TraceEvent[]) {
   for (const e of events) {
     let n = nodes.get(e.agent)
     if (!n) {
-      n = { name: e.agent, parent: e.parent && e.parent !== e.agent ? e.parent : null, llm: 0, tools: 0, cost: 0, tokens: 0, last: e.ts, first: e.ts, done: false, depth: 0, x: 0, y: 0 }
+      n = { name: e.agent, parent: e.parent && e.parent !== e.agent ? e.parent : null, last: e.ts, first: e.ts, done: false, depth: 0, x: 0, y: 0 }
       nodes.set(e.agent, n)
     }
     n.last = e.ts
-    if (e.kind === 'llm') { n.llm++; n.cost += e.cost_usd ?? 0; n.tokens += (e.tokens_in ?? 0) + (e.tokens_out ?? 0) }
-    if (e.kind === 'tool') n.tools++
     if (e.kind === 'done') n.done = true
   }
   for (const n of nodes.values()) if (n.parent && !nodes.has(n.parent)) n.parent = null
@@ -51,6 +50,12 @@ export default function AgentsView({ p, events }: { p: Project; events: TraceEve
   const { nodes, height } = useMemo(() => buildGraph(events), [events])
   const now = events.length ? events[events.length - 1].ts : 0
   const byName = new Map(nodes.map((n) => [n.name, n]))
+  const r = useMemo(() => researchStats(p, events), [p, events])
+  const nodeLabel = (name: string) => {
+    const a = agentStats(name, p.papers, events)
+    const parts = [a.papers && plural(a.papers, 'paper'), a.searches && plural(a.searches, 'search', 'searches'), a.passages && plural(a.passages, 'passage')]
+    return parts.filter(Boolean).join(' · ') || (byName.get(name)?.done ? 'done' : 'working')
+  }
   const shown = events.filter((e) => (filter === 'all' || e.kind === filter) && (!agent || e.agent === agent)).slice(-400).reverse()
 
   return (
@@ -58,10 +63,12 @@ export default function AgentsView({ p, events }: { p: Project; events: TraceEve
       <Card className="overflow-hidden p-0">
         <div className="flex items-center justify-between px-6 pt-5">
           <SectionTitle>Agent swarm · {nodes.length} agents</SectionTitle>
-          <div className="flex gap-3 text-xs text-muted">
-            <span>{p.totals.llm_calls} LLM calls</span><span>{p.totals.tool_calls} tool calls</span>
-            <span>{(p.totals.tokens_in + p.totals.tokens_out).toLocaleString()} tokens</span><span>${p.totals.cost_usd.toFixed(4)}</span>
-            <span>{p.totals.compressions} compressions</span>
+          <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-[13px] text-muted">
+            <span><b className="font-semibold text-ink">{plural(r.papers, 'paper')}</b> found ({r.relevant} relevant)</span>
+            <span><b className="font-semibold text-ink">{r.read}</b> read in full</span>
+            <span><b className="font-semibold text-ink">{plural(r.passages, 'passage')}</b> retrieved</span>
+            <span><b className="font-semibold text-ink">{plural(r.searches, 'search', 'searches')}</b></span>
+            <span><b className="font-semibold text-ink">{plural(r.findings, 'finding')}</b> noted</span>
           </div>
         </div>
         <div className="scroll-thin overflow-x-auto">
@@ -80,7 +87,7 @@ export default function AgentsView({ p, events }: { p: Project; events: TraceEve
                   {live && <circle r="9" fill="none" stroke={color(n.name)} strokeWidth="2" className="node-pulse" />}
                   <circle r="9" fill={n.done ? color(n.name) : 'var(--surface)'} stroke={color(n.name)} strokeWidth={sel ? 4 : 2} />
                   <text y="-18" textAnchor="middle" fontSize="12" fill="var(--ink)" fontWeight={600}>{n.name.length > 30 ? n.name.slice(0, 29) + '…' : n.name}</text>
-                  <text y="28" textAnchor="middle" fontSize="10" fill="var(--muted)">{n.llm} llm · {n.tools} tools{n.cost ? ` · $${n.cost.toFixed(3)}` : ''}</text>
+                  <text y="28" textAnchor="middle" fontSize="10" fill="var(--muted)">{nodeLabel(n.name)}</text>
                 </g>
               )
             })}
@@ -108,14 +115,13 @@ export default function AgentsView({ p, events }: { p: Project; events: TraceEve
                   <span className="w-48 shrink-0 truncate" style={{ color: color(e.agent) }}>{e.agent}</span>
                   <span className="min-w-0 flex-1 truncate text-ink">{e.title}</span>
                   <span className="shrink-0 text-muted">
-                    {e.kind === 'llm' && `${(e.tokens_in ?? 0) + (e.tokens_out ?? 0)}t · ${((e.latency_ms ?? 0) / 1000).toFixed(1)}s`}
-                    {e.kind === 'compress' && `${e.tokens_in?.toLocaleString()} → ${e.tokens_out?.toLocaleString()}t`}
+                    {e.kind === 'llm' && e.latency_ms != null && `${(e.latency_ms / 1000).toFixed(1)}s`}
                     {(e.kind === 'tool' || e.kind === 'source') && e.latency_ms != null && `${(e.latency_ms / 1000).toFixed(1)}s`}
                   </span>
                 </button>
                 {open === e.id && (
                   <div className="ml-16 mt-1 whitespace-pre-wrap break-words rounded-lg bg-sunken p-3 text-[11.5px] text-muted">
-                    {e.model && <div className="mb-1 text-info">{e.provider} · {e.model}{e.cost_usd ? ` · $${e.cost_usd.toFixed(5)}` : ''}</div>}
+                    {e.model && <div className="mb-1 text-info">{e.provider}: {e.model}</div>}
                     {e.detail || '(no detail)'}
                   </div>
                 )}

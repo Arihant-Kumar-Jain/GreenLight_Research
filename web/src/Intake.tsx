@@ -36,6 +36,9 @@ export default function Intake({ id }: { id: string }) {
   const [text, setText] = useState('')
   const [err, setErr] = useState('')
   const [starting, setStarting] = useState(false)
+  // Answers to the latest follow-up questions, kept until every question has one, then sent together.
+  const [picks, setPicks] = useState<Record<number, string>>({})
+  const [own, setOwn] = useState<Record<number, string>>({})
   const end = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,20 +58,31 @@ export default function Intake({ id }: { id: string }) {
 
   useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }) }, [view?.messages.length, view?.busy])
 
+  const msgs = view?.messages ?? []
+  const last = [...msgs].reverse().find((m) => m.role === 'assistant')
+  const ready = !!last?.data?.ready
+  const questions = last?.data?.questions ?? []
+  useEffect(() => { setPicks({}); setOwn({}) }, [last?.id])
+  const answerOf = (i: number) => own[i]?.trim() || picks[i] || ''
+  const answered = questions.filter((_, i) => answerOf(i)).length
+  const answerLines = () => questions.map((q, i) => (answerOf(i) ? `${i + 1}. ${q.question}\n→ ${answerOf(i)}` : '')).filter(Boolean).join('\n\n')
+
   async function send(msg: string) {
     if (!msg.trim() || view?.busy) return
     setText('')
     try { setView(await api.intakeSend(id, msg)) } catch (e) { setErr((e as Error).message) }
+  }
+  // Free text from the box below also carries any answers already picked, so none are dropped.
+  const sendText = () => {
+    const extra = text.trim()
+    const a = answerLines()
+    send(a && extra ? `${a}\n\n${extra}` : a || extra)
   }
 
   async function start() {
     setStarting(true)
     try { await api.start(id); go(`/p/${id}/agents`) } catch (e) { setErr((e as Error).message); setStarting(false) }
   }
-
-  const msgs = view?.messages ?? []
-  const last = [...msgs].reverse().find((m) => m.role === 'assistant')
-  const ready = !!last?.data?.ready
 
   return (
     <div className="flex h-screen flex-col">
@@ -96,16 +110,41 @@ export default function Intake({ id }: { id: string }) {
                           <div key={i}>
                             <div className="text-sm font-medium">{i + 1}. {q.question}</div>
                             {q.why && <div className="text-xs text-muted">{q.why}</div>}
-                            {m.id === last?.id && q.options.length > 0 && (
-                              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                {q.options.map((o) => (
-                                  <button key={o} onClick={() => send(`${q.question} → ${o}`)} disabled={view?.busy}
-                                    className="rounded-full border border-line px-2.5 py-1 text-xs hover:border-go hover:text-go">{o}</button>
-                                ))}
+                            {m.id === last?.id && (
+                              <div className="mt-2 space-y-2">
+                                {q.options.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {q.options.map((o) => {
+                                      const on = picks[i] === o && !own[i]?.trim()
+                                      return (
+                                        <button key={o} aria-pressed={on} disabled={view?.busy}
+                                          onClick={() => { setPicks((s) => ({ ...s, [i]: s[i] === o ? '' : o })); setOwn((s) => ({ ...s, [i]: '' })) }}
+                                          className={cx('rounded-full border px-3 py-1 text-[13px] transition',
+                                            on ? 'border-go bg-go text-on-go' : 'border-line hover:border-go hover:text-go')}>
+                                          {o}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                                <input value={own[i] ?? ''} onChange={(e) => setOwn((s) => ({ ...s, [i]: e.target.value }))}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' && answered === questions.length) send(answerLines()) }}
+                                  placeholder={q.options.length ? 'Or type your own answer' : 'Your answer'} aria-label={`Answer to question ${i + 1}`}
+                                  className="w-full rounded-lg border border-line bg-bg px-3 py-1.5 text-[13.5px] outline-none focus:border-go/50" />
                               </div>
                             )}
                           </div>
                         ))}
+                        {m.id === last?.id && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+                            <span className="text-[13px] text-muted">
+                              {answered === questions.length ? 'All answered.' : `${answered} of ${questions.length} answered. Answer each question to continue.`}
+                            </span>
+                            <Button onClick={() => send(answerLines())} disabled={answered < questions.length || view?.busy} className="py-1.5">
+                              Send answers
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -118,10 +157,10 @@ export default function Intake({ id }: { id: string }) {
           <div className="border-t border-line px-6 py-4">
             <div className="mx-auto flex max-w-3xl items-end gap-2">
               <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(text) } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText() } }}
                 placeholder="Answer, add detail, or say “just start”…"
                 className="flex-1 resize-none rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-go/50" />
-              <button onClick={() => send(text)} disabled={!text.trim() || view?.busy}
+              <button onClick={sendText} disabled={!text.trim() || view?.busy}
                 className="grid h-11 w-11 place-items-center rounded-xl bg-go text-on-go disabled:opacity-30"><ArrowUp size={18} /></button>
             </div>
             {err && <p className="mx-auto mt-2 max-w-3xl text-sm text-stop">{err}</p>}
