@@ -143,6 +143,16 @@ auto-clusters, "explain how these two relate")
 · **Papers** (credibility breakdowns, audits, links) · **Novelty matrix** (verified quotes) · **Chamber** (3D chamber +
 transcript) · **Report** (citation check) · **Chat** · **Notebook**.
 
+## Demo checklist (15 min before judging)
+
+1. `.env`: `NEBIUS_API_KEY` (sponsor: must show **Nebius Token Factory**), `TAVILY_API_KEY`; ideally `OPENALEX_API_KEY`,
+   `NVIDIA_API_KEY` (NeMo Retriever reranker), `S2_API_KEY`.
+2. `make dev` in a terminal → `curl localhost:8100/api/health`: `llm_provider` = Nebius Token Factory, models =
+   Nemotron Nano/Super/Ultra + Qwen3-Embedding-8B, `rerankers.chain` starts with `nim` (or `local`).
+3. Start one fresh run (~9 min) and keep it open: Agents (live) graph while it runs, then Verdict → Relationship graph
+   → Novelty matrix → Chamber → Chat. **Stop** cancels a run; **Re-run** starts over.
+4. Not built: sign-in (don't expose publicly), Postgres/hosting, the "hard" retrieval eval set (`make eval P=<id>`).
+
 ## Layout
 
 ```

@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Share2, Sparkles } from 'lucide-react'
+import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Share2, Sparkles, Square } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Project, type TraceEvent } from './api'
 import { Logo } from './Home'
@@ -201,6 +201,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
           <Logo />
           <div className="flex items-center gap-2">
             {p.running && <Badge tone="info"><Activity size={11} className="animate-glow" /> agents working</Badge>}
+            {p.running && <Button variant="ghost" onClick={async () => { await api.stop(id).catch(() => {}); load() }}><Square size={13} /> Stop</Button>}
             {!p.running && p.status !== 'draft' && <Button variant="ghost" onClick={async () => { await api.rerun(id); cursor.current = 0; setEvents([]); load() }}><RotateCcw size={14} /> Re-run</Button>}
           </div>
         </nav>

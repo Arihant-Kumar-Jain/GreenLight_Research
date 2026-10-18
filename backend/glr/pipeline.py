@@ -27,6 +27,14 @@ def start(pid: str) -> None:
     _running[pid] = asyncio.create_task(run(pid))
 
 
+def cancel(pid: str) -> bool:
+    t = _running.get(pid)
+    if not t or t.done():
+        return False
+    t.cancel()
+    return True
+
+
 def is_running(pid: str) -> bool:
     return pid in _running and not _running[pid].done()
 
@@ -99,6 +107,10 @@ async def run(pid: str) -> None:
             trace.info(f"Done: {v['light'].upper()} — {v['headline']}",
                        f"{totals['llm_calls']} LLM calls, {totals['tool_calls']} tool calls, {totals['agents']} agents, "
                        f"${totals['cost_usd']:.4f}")
+        except asyncio.CancelledError:
+            trace.info("Run stopped by the user")
+            if db.project(pid):
+                db.update_project(pid, status="error", error="Stopped by the user. Press Re-run to start again.")
         except Exception as e:
             msg = scrub_secrets(f"{type(e).__name__}: {e}")
             trace.error("Research run failed", scrub_secrets(traceback.format_exc())[-3000:])

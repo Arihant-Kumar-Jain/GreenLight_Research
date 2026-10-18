@@ -127,6 +127,14 @@ async def start(pid: str):
     return _summary(db.project(pid))
 
 
+@app.post("/api/projects/{pid}/stop")
+async def stop(pid: str):
+    _project_or_404(pid)
+    if not pipeline.cancel(pid):
+        raise HTTPException(409, "Not running")
+    return {"stopped": True}
+
+
 @app.post("/api/projects/{pid}/rerun")
 async def rerun(pid: str):
     _project_or_404(pid)
@@ -143,7 +151,7 @@ async def rerun(pid: str):
 async def delete(pid: str):
     _project_or_404(pid)
     if pipeline.is_running(pid):
-        raise HTTPException(409, "Stop is not supported while running; wait for it to finish")
+        raise HTTPException(409, "Stop the run first")
     db.delete_project(pid)
     return {"ok": True}
 

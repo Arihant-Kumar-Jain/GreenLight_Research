@@ -141,6 +141,7 @@ export const api = {
   intake: (id: string) => req<IntakeView>(`/api/projects/${id}/intake`),
   intakeSend: (id: string, text: string) => post<IntakeView>(`/api/projects/${id}/intake`, { text }),
   start: (id: string) => post<ProjectSummary>(`/api/projects/${id}/start`),
+  stop: (id: string) => post<{ stopped: boolean }>(`/api/projects/${id}/stop`),
   rerun: (id: string) => post<ProjectSummary>(`/api/projects/${id}/rerun`),
   remove: (id: string) => req<{ ok: boolean }>(`/api/projects/${id}`, { method: 'DELETE' }),
   project: (id: string) => req<Project>(`/api/projects/${id}`),
