@@ -86,7 +86,15 @@ class Clash(BaseModel):
     why: str
 
 
+class Scores(BaseModel):
+    novelty: float = Field(5, description="1 = done before, 10 = clearly new")
+    significance: float = Field(5, description="How much the field would care if it works")
+    soundness: float = Field(5, description="How well-founded the approach is, given the evidence")
+    feasibility: float = Field(5, description="How doable with typical academic resources")
+
+
 class Ruling(BaseModel):
+    scores: Scores = Field(default_factory=Scores, description="Review-style scores, 1-10 each")
     clashes: list[Clash] = Field(default_factory=list, description="2-4 decisive clashes")
     deciding_factor: str = ""
     light: Literal["green", "amber", "red"]
@@ -129,7 +137,8 @@ is weak). Name the 2-4 decisive clashes, the deciding factor, then rule:
   green = clearly novel: core components are open, the closest work leaves a real gap, worth pursuing now.
   amber = partially done or crowded: worth pursuing only with sharper differentiation, or evidence is thin.
   red   = already done (credible prior work covers the core idea), or not worth pursuing as stated.
-A researcher who gets a false green wastes months. Give concrete differentiation and next steps."""
+A researcher who gets a false green wastes months. Give concrete differentiation and next steps.
+Also score it like a peer reviewer, 1-10 each: novelty, significance, soundness, feasibility."""
 
 
 LENS_NAMES = ("overall", "strict novelty", "significance")
@@ -238,6 +247,10 @@ async def hold(pid: str, motion: str, pack: dict, on_update=None) -> dict:
     majority = max(set(votes), key=lambda c: (votes.count(c), -abs(order[c] - 1)))
     r = next(x for x in rulings if x["light"] == majority)
     r["votes"] = votes
+    # review-style scores: mean over the panel (each Speaker scores independently)
+    r["scores"] = {k: round(sum(min(10.0, max(1.0, float((x.get("scores") or {}).get(k, 5)))) for x in rulings)
+                            / len(rulings), 1)
+                   for k in ("novelty", "significance", "soundness", "feasibility")}
     r["confidence"] = round(r.get("confidence", 0.5) * votes.count(majority) / len(votes), 3)
     with trace.scope(agent="Speaker"):
         trace.info(f"Speaker panel {votes.count(majority)}/{len(votes)} {majority.upper()} (votes: {', '.join(votes)}): "

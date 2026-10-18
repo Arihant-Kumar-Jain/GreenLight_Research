@@ -60,6 +60,7 @@ export type Verdict = {
   light: Light; headline: string; confidence: number; reasons: string[]; differentiation: string[]; next_steps: string[]
   clashes: { issue: string; winner: string; why: string }[]; deciding_factor: string
   speaker_light: Light; speaker_headline: string; guardrails: { from: Light; to: Light; why: string }[]; votes?: Light[]
+  scores?: { novelty: number; significance: number; soundness: number; feasibility: number }
 }
 export type Debate = {
   motion: string; status: string; proponent: Side; skeptic: Side; struck?: number; weak?: number

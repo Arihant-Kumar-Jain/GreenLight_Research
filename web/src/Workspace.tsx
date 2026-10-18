@@ -4,7 +4,7 @@ import { api, type Project, type TraceEvent } from './api'
 import { GoogleButton, useAuth, UserMenu } from './auth'
 import { Logo } from './Home'
 import TrafficLight from './TrafficLight'
-import { Badge, Button, Card, cx, LIGHT, Markdown, PaperCtx, SectionTitle } from './ui'
+import { Badge, Button, Card, cx, LIGHT, Markdown, Meter, PaperCtx, SectionTitle } from './ui'
 import AgentsView from './views/AgentsView'
 import ChamberView from './views/ChamberView'
 import ChatView from './views/ChatView'
@@ -107,6 +107,20 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
         )}
       </div>
       <div className="space-y-6">
+        {v?.scores && (
+          <Card className="p-6">
+            <SectionTitle>Review scores (Speaker panel)</SectionTitle>
+            <div className="space-y-3">
+              {(['novelty', 'significance', 'soundness', 'feasibility'] as const).map((k) => (
+                <div key={k}>
+                  <div className="mb-1 flex justify-between text-sm"><span className="capitalize">{k}</span><span className="font-semibold tabular-nums">{v.scores![k]}<span className="text-muted">/10</span></span></div>
+                  <Meter value={v.scores![k] * 10} tone={v.scores![k] >= 7 ? 'go' : v.scores![k] >= 4.5 ? 'wait' : 'stop'} />
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted">Mean of three independent Nemotron Ultra Speakers, scored like a peer review.</p>
+          </Card>
+        )}
         {p.novelty && (
           <Card className="p-6">
             <SectionTitle>Novelty score</SectionTitle>
