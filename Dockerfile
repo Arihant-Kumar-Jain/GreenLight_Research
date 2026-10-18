@@ -16,7 +16,8 @@ COPY backend/glr ./glr
 RUN uv sync --frozen --no-dev
 # api.py serves REPO_DIR/web/dist, so keep backend/ and web/dist side by side.
 COPY --from=web /app/web/dist /app/web/dist
-RUN useradd --system --uid 10001 glr && mkdir -p /data && chown glr /data
+# Readable by the app user whatever the host's umask was when the repo was checked out.
+RUN chmod -R a+rX /app && useradd --system --uid 10001 glr && mkdir -p /data && chown glr /data
 USER glr
 ENV GLR_DB_PATH=/data/glr.db PATH=/app/backend/.venv/bin:$PATH
 EXPOSE 8100
