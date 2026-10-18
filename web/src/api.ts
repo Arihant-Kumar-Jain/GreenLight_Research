@@ -12,7 +12,8 @@ export type Message = {
   data: { questions?: Question[]; ready?: boolean; missing?: string[]; papers?: string[]; steps?: number; tool_calls?: number
     stopped_because?: string; budget?: { usd: number; llm_calls: number; tool_calls: number; elapsed_s: number }
     context?: { compressions: number; elided: number; folded_groups: number; peak_tokens: number }
-    redactions?: { type: string; label: string; count: number }[]; error?: boolean } | null
+    redactions?: { type: string; label: string; count: number }[]; error?: boolean
+    citations?: { supported: number; partial: number; unsupported: number } | null } | null
 }
 
 export type ProjectSummary = {
@@ -35,7 +36,7 @@ export type Paper = {
   doi: string | null; authors: string[]; n_authors: number; venue: string | null; citations: number | null
   retracted: boolean; found_by: string[]; sources: string[]; credibility: Credibility | null; audit: Audit | null
   hf: { upvotes?: number; models?: number; datasets?: number; spaces?: number; github?: string; url?: string } | null
-  read: boolean; abstract: string
+  read: boolean; abstract: string; relevance: number | null; relevance_by: string | null
 }
 
 export type Relation = { id: string; relation: 'same idea' | 'very close' | 'related' | 'background'; why: string }
@@ -43,9 +44,9 @@ export type Review = {
   synthesis: string; closest: Relation[]; gaps: string[]; confidence: string; rounds: number; scouts: number
   coverage: { component: string; status: 'covered' | 'partially' | 'open'; papers: string[]; note: string }[]
 }
-export type Cell = { component: string; overlap: 'none' | 'partial' | 'full' | 'unverified'; quote: string; note: string; verified?: boolean; claimed?: string }
+export type Cell = { component: string; overlap: 'none' | 'partial' | 'full' | 'unverified'; quote: string; note: string; verified?: boolean; claimed?: string; strict?: { verdict: string; why: string } }
 export type Novelty = {
-  score: number | null; unverified_claims: number
+  score: number | null; unverified_claims: number; strict_downgrades?: number
   components: { id: string; text: string; core: boolean; best: string; covered_by: { paper_id: string; overlap: string }[] }[]
   papers: { paper_id: string; relation: string; difference: string; cells: Cell[] }[]
   already_done_by: { paper_id: string; credibility: number | null }[]
@@ -104,6 +105,21 @@ export type GraphData = {
   idea: { title: string }; stats: { cites: number; similar: number; refs_via: Record<string, number> }
 }
 
+export type Gate = { threshold: number | null; balanced_accuracy: number; auroc: number | null; pass_rate_answerable: number | null; reject_rate_offtopic: number | null }
+export type EvalRow = {
+  config: string; reranker: string | null; 'recall@1': number; 'recall@5': number; 'recall@10': number; 'mrr@10': number
+  'ndcg@10': number; 'paper_hit@5': number; latency_ms: number; p95_ms: number; concurrency?: number; gate?: Gate
+}
+export type EvalSet = {
+  style: string; n_pos: number; n_neg: number; synthetic: boolean; embed_model: string; expansion_model: string
+  rerankers: Record<string, string>; rows: EvalRow[]; examples: string[]
+}
+export type Evals = {
+  running: boolean
+  retrieval: { project: string; date: string; sets: Record<string, EvalSet> } | null
+  calibration: Record<string, Gate & { measured_on: string; model: string; date: string; n_pos: number; n_neg: number; set?: string }>
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...init })
   if (!r.ok) {
@@ -134,5 +150,7 @@ export const api = {
   scorePaper: (id: string, pid: string) => post<Paper>(`/api/projects/${id}/papers/${pid}/score`),
   graph: (id: string, refresh = false) => req<GraphData>(`/api/projects/${id}/graph${refresh ? '?refresh=1' : ''}`),
   explain: (id: string, a: string, b: string, facts: string) => post<{ text: string }>(`/api/projects/${id}/graph/explain`, { a, b, facts }),
+  evals: () => req<Evals>('/api/evals'),
+  runEval: (pid: string, rebuild = false) => post<{ started: boolean }>(`/api/evals/retrieval/${pid}${rebuild ? '?rebuild=1' : ''}`),
   redact: (text: string) => post<{ text: string; found: { type: string; label: string; count: number }[] }>('/api/redact', { text }),
 }

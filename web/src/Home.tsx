@@ -64,7 +64,8 @@ export default function Home() {
       </Suspense>
       <nav className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <Logo />
-        <div className="flex items-center gap-2 text-xs text-muted">
+        <div className="flex items-center gap-3 text-xs text-muted">
+          <a href="#/proof" className="hover:text-ink">Proof</a>
           {health && (health.missing_keys.length
             ? <Badge tone="stop">Missing: {health.missing_keys.join(', ')}</Badge>
             : <Badge tone="go">{health.llm_provider} · Tavily ready</Badge>)}

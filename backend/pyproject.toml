@@ -18,6 +18,10 @@ dependencies = [
     "pypdf>=5.0",
 ]
 
+[project.optional-dependencies]
+# Local cross-encoder reranker (bge-reranker-v2-m3). Uses CUDA / Apple MPS / CPU automatically. `uv sync --extra local`
+local = ["sentence-transformers>=3.3", "torch>=2.5"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

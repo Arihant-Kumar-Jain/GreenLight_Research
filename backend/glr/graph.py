@@ -32,8 +32,9 @@ def _nodes(pid: str, limit: int) -> list[dict]:
     closest = [c["id"] for c in (((p.get("stats") or {}).get("review") or {}).get("closest") or [])]
     mapped = [r["paper_id"] for r in ((p.get("novelty") or {}).get("papers") or [])]
     papers = {x["id"]: x for x in db.papers(pid)}
-    scored = sorted([x for x in papers.values() if x.get("credibility")],
-                    key=lambda x: -(x["credibility"]["score"] + (x.get("citations") or 0) ** 0.3))
+    # then by cross-encoder relevance to the idea, credibility as tiebreak
+    scored = sorted(papers.values(), key=lambda x: -((x.get("relevance") or 0) * 100
+                                                     + ((x.get("credibility") or {}).get("score") or 0) * 0.2))
     order = list(dict.fromkeys(closest + mapped + [x["id"] for x in scored] + list(papers)))
     return [papers[i] for i in order[:limit] if i in papers]
 
@@ -212,6 +213,7 @@ async def build(pid: str, limit: int = 60) -> dict:
         assign, clusters = _clusters(nodes, cites + sims)
         out_nodes = [{"id": n["id"], "title": n["title"], "year": n.get("year"), "citations": n.get("citations"),
                       "credibility": (n.get("credibility") or {}).get("score"), "cluster": assign.get(n["id"], -1),
+                      "relevance": n.get("relevance"),
                       "relation": rel.get(n["id"], {}).get("relation"), "refs_via": n.get("refs_via"),
                       "n_refs": len(n.get("refs") or [])} for n in nodes]
         trace.info(f"Paper graph: {len(out_nodes)} papers, {len(cites)} citation links, {len(sims)} similarity links, "

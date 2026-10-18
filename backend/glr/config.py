@@ -56,6 +56,21 @@ class Settings:
     hf_token: str = field(default_factory=lambda: _env("HF_TOKEN"))                 # optional, higher HF rate limits
     cache_web: bool = field(default_factory=lambda: _env("GLR_CACHE_WEB", "1") == "1")
 
+    # ---- Reranking + retrieval (rerank.py, corpus.py)
+    reranker: str = field(default_factory=lambda: _env("GLR_RERANKER"))  # nim | endpoint | local | llm | none | "" = auto
+    nvidia_api_key: str = field(default_factory=lambda: _env("NVIDIA_API_KEY"))  # build.nvidia.com API catalog
+    nim_rerank_url: str = field(default_factory=lambda: _env("GLR_NIM_RERANK_URL"))  # self-hosted NIM .../v1/ranking
+    nim_rerank_hosted_url: str = field(default_factory=lambda: _env(
+        "GLR_NIM_RERANK_HOSTED_URL",
+        "https://ai.api.nvidia.com/v1/retrieval/nvidia/llama-3_2-nv-rerankqa-1b-v2/reranking"))
+    nim_rerank_model: str = field(default_factory=lambda: _env("GLR_NIM_RERANK_MODEL", "nvidia/llama-3.2-nv-rerankqa-1b-v2"))
+    rerank_url: str = field(default_factory=lambda: _env("GLR_RERANK_URL"))  # Jina/Cohere-style /rerank (e.g. vLLM)
+    rerank_model: str = field(default_factory=lambda: _env("GLR_RERANK_MODEL", "Qwen/Qwen3-Reranker-8B"))
+    rerank_key: str = field(default_factory=lambda: _env("GLR_RERANK_KEY"))
+    rerank_local_model: str = field(default_factory=lambda: _env("GLR_RERANK_LOCAL_MODEL"))  # "" = device-aware
+    query_expansion: bool = field(default_factory=lambda: _env("GLR_QUERY_EXPANSION", "1") == "1")  # multi-query + HyDE
+    expansion_deadline_s: float = field(default_factory=lambda: _float("GLR_EXPANSION_DEADLINE", 6.0))
+
     # ---- Agent harness budgets (per research run)
     max_usd_per_run: float = field(default_factory=lambda: _float("GLR_MAX_USD_PER_RUN", 0.75))
     max_research_rounds: int = field(default_factory=lambda: _int("GLR_RESEARCH_ROUNDS", 2))

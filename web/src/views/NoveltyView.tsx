@@ -59,13 +59,14 @@ export default function NoveltyView({ p }: { p: Project }) {
           </tbody>
         </table>
         <p className="mt-4 text-xs text-muted">
-          Every “done” / “partly” cell needs a verbatim quote from the paper that we found in its text. {n.unverified_claims} claimed overlap(s) had no matching quote and were downgraded to “unverified” (not counted).
+          Every “done” / “partly” cell needs a verbatim quote from the paper that we found in its text. {n.unverified_claims} claimed overlap(s) had no matching quote and were downgraded to “unverified” (not counted). A second, stricter judge re-checks every “done” cell: same mechanism in a different setting counts as “partly”{n.strict_downgrades ? ` (${n.strict_downgrades} downgraded)` : ''}.
         </p>
       </Card>
       {sel && (
         <Card className="animate-rise p-6">
           <div className="flex items-center gap-2"><Cite id={sel.pid} /><span className="font-mono text-xs text-muted">{sel.cell.component}</span><Badge>{CELL[sel.cell.overlap].label}</Badge>
-            {sel.cell.verified && <Badge tone="go">quote verified in paper</Badge>}{sel.cell.claimed && <Badge tone="stop">model claimed “{sel.cell.claimed}” but the quote was not found</Badge>}</div>
+            {sel.cell.verified && <Badge tone="go">quote verified in paper</Badge>}{sel.cell.claimed && <Badge tone="stop">model claimed “{sel.cell.claimed}” but the quote was not found</Badge>}
+            {sel.cell.strict && <Badge tone="wait">strict judge downgraded “full” → {sel.cell.strict.verdict}: {sel.cell.strict.why}</Badge>}</div>
           <p className="mt-3 text-sm">{sel.cell.note}</p>
           {sel.cell.quote && <blockquote className="mt-3 border-l-2 border-line pl-3 text-sm italic text-muted">“{sel.cell.quote}”</blockquote>}
         </Card>

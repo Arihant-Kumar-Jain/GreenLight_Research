@@ -8,7 +8,7 @@ const KIND: Record<string, { tone: Tone; label: string }> = {
   llm: { tone: 'info', label: 'LLM' }, tool: { tone: 'go', label: 'TOOL' }, source: { tone: 'neutral', label: 'API' },
   spawn: { tone: 'wait', label: 'SPAWN' }, done: { tone: 'go', label: 'DONE' }, compress: { tone: 'wait', label: 'COMPRESS' },
   guard: { tone: 'stop', label: 'GUARD' }, budget: { tone: 'stop', label: 'BUDGET' }, info: { tone: 'neutral', label: 'INFO' },
-  error: { tone: 'stop', label: 'ERROR' },
+  error: { tone: 'stop', label: 'ERROR' }, rerank: { tone: 'info', label: 'RERANK' },
 }
 
 function color(name: string) {
@@ -92,7 +92,7 @@ export default function AgentsView({ p, events }: { p: Project; events: TraceEve
       <Card className="p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <h3 className="eyebrow mr-2">Live trace</h3>
-          {['all', 'llm', 'tool', 'source', 'spawn', 'compress', 'guard', 'error'].map((k) => (
+          {['all', 'llm', 'tool', 'source', 'rerank', 'spawn', 'compress', 'guard', 'error'].map((k) => (
             <button key={k} onClick={() => setFilter(k)} className={cx('rounded-full border px-2.5 py-0.5 text-xs', filter === k ? 'border-go text-go' : 'border-line text-muted')}>{k}</button>
           ))}
           {agent && <button onClick={() => setAgent(null)} className="rounded-full bg-info-soft px-2.5 py-0.5 text-xs text-info">agent: {agent} ✕</button>}

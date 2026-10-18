@@ -13,7 +13,7 @@ from typing import Annotated
 
 from pydantic import Field
 
-from .. import db, llm, papers, privacy, trace
+from .. import db, llm, papers, privacy, trace, verify
 from ..budget import Budget
 from ..config import settings
 from ..harness import Agent, tool
@@ -118,7 +118,15 @@ async def reply(pid: str, text: str) -> dict:
     bad = [i for i in cited if i not in known]
     if bad:
         answer += f"\n\n> ⚠️ Unknown paper id(s) {', '.join(bad)} in this answer: treat those claims as unsupported."
+    check = None
+    if any(i in known for i in cited):  # same groundedness check as the report, on every cited sentence
+        with trace.scope(project_id=pid, agent="Citation Checker"):
+            check = await verify.check_claims(pid, answer, max_claims=12)
+        flagged = {c["text"] for c in check["claims"] if c["label"] == "unsupported"}
+        for sent in flagged:
+            answer = answer.replace(sent, f"{sent} ⚠️*[not supported by the cited paper]*")
     data = {"papers": [i for i in cited if i in known], "steps": res.steps, "tool_calls": res.tool_calls,
+            "citations": {k: check[k] for k in ("supported", "partial", "unsupported")} if check else None,
             "stopped_because": res.stopped_because, "budget": budget.snapshot(), "context": res.context}
     db.add_message(pid, "chat", "assistant", answer, data)
     return {"content": answer, **data}

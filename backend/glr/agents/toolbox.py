@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from .. import corpus, db, papers, privacy, trace, web
+from .. import corpus, db, papers, privacy, rerank, trace, web
 from ..harness import Tool, tool
 from ..sources import arxiv, hf, openalex
 
@@ -35,17 +35,46 @@ def _clean_query(q: str) -> str:
     return red.text
 
 
+def focus_text(pid: str) -> str:
+    """What the project is about, for relevance triage of search results."""
+    b = (db.project(pid) or {}).get("brief") or {}
+    return " ".join(x for x in (b.get("research_question"), b.get("method"), "; ".join(b.get("contributions") or [])) if x)[:1500]
+
+
+async def triage(pid: str, ids: list[str]) -> dict[str, float]:
+    """Cross-encoder relevance of papers (title + abstract) to the research idea; kept as the max seen per paper."""
+    focus = focus_text(pid)
+    ps = [db.paper(pid, i) for i in ids]
+    ps = [p for p in ps if p]
+    if not focus or not ps:
+        return {}
+    scores, kind = await rerank.rerank(focus, [f"{p['title']}. {(p.get('abstract') or '')[:1500]}" for p in ps])
+    if kind == "none":
+        return {}
+    out = {}
+    for p, s in zip(ps, rerank.normalise(scores, kind)):
+        rel = round(max(s, p.get("relevance") or 0.0), 3)
+        db.update_paper(pid, p["id"], relevance=rel, relevance_by=kind)
+        out[p["id"]] = rel
+    return out
+
+
 def research_tools(pid: str, agent: str, *, include: set[str] | None = None) -> list[Tool]:
     async def _ingest(records: list[dict], source: str, abstract_chars: int = 280) -> dict:
         rows = await papers.ingest(pid, records, found_by=agent)
+        rel = await triage(pid, [r["id"] for r in rows])
         cards = []
         for r in rows:
             p = db.paper(pid, r["id"]) or {}
             c = papers.card(p, abstract_chars)
             c["new"] = r["new"]
+            if r["id"] in rel:
+                c["relevance"] = rel[r["id"]]
             cards.append(c)
+        cards.sort(key=lambda c: -(c.get("relevance") or 0))
         return {"source": source, "papers": cards,
-                "hint": "Ids (P#) are shared by all agents. Use paper_details or read_fulltext to go deeper."}
+                "hint": "Sorted by cross-encoder relevance to the research idea (0-1). Ids (P#) are shared by all "
+                        "agents. Use paper_details or read_fulltext to go deeper."}
 
     @tool("Search arXiv (preprints, CS/ML/physics/math/q-bio). Short keyword queries work best, e.g. "
           "'low-rank adaptation mixture of experts'.", digest=_papers_digest)
@@ -122,17 +151,24 @@ def research_tools(pid: str, agent: str, *, include: set[str] | None = None) -> 
         if "error" in info:
             info["passages"] = await corpus.search(pid, focus, k=2, paper_ids=[paper_id])
             return info
-        return {**info, "passages": await corpus.search(pid, focus, k=4, paper_ids=[paper_id])}
+        return {**info, "passages": await corpus.search(pid, focus, k=4, paper_ids=[paper_id], expand_query=True)}
 
-    @tool("Semantic + keyword search over everything already collected (abstracts and full texts read so far). "
-          "Cheap: use it before new web/scholar searches.", digest=_passages_digest)
+    @tool("Search everything already collected (abstracts + full texts read so far) with the full retrieval stack: "
+          "query expansion (paraphrases + hypothetical answer), BM25 + dense recall, cross-encoder reranking, "
+          "diversity. Returns `sufficient_evidence`: false means the corpus does not contain a good answer — then "
+          "search the literature (or say so) instead of answering from weak passages. Use it before new searches.",
+          digest=_passages_digest)
     async def search_corpus(query: Annotated[str, Field(description="what you need evidence for")],
                             k: Annotated[int, Field(ge=1, le=12)] = 6,
                             paper_ids: Annotated[list[str] | None, Field(description="restrict to these P# ids")] = None
                             ) -> dict:
-        hits = await corpus.search(pid, query, k, paper_ids)
-        return {"passages": [{"paper_id": h["paper_id"], "chunk_id": h["chunk_id"], "kind": h["kind"],
-                              "text": h["text"][:900]} for h in hits]}
+        r = await corpus.retrieve(pid, query, k, paper_ids, expand_query=True)
+        note = ("Top passage is below the calibrated relevance threshold: the corpus likely lacks this."
+                if r["sufficient"] is False else None)
+        return {"sufficient_evidence": r["sufficient"], "note": note, "reranker": r["reranker"],
+                "passages": [{"paper_id": h["paper_id"], "chunk_id": h["chunk_id"], "kind": h["kind"],
+                              "relevance": h["score"], "text": h["text"][:900],
+                              **({"context_after": h["after"][:250]} if h.get("after") else {})} for h in r["hits"]]}
 
     @tool("Write a finding to the shared research notebook. Every agent (and the final report) sees the notebook, and "
           "it survives context compression. Cite paper ids in refs.",

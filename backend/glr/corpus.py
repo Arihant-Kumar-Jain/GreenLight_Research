@@ -1,17 +1,31 @@
-"""Per-project paper corpus: chunking, Qwen3 embeddings and hybrid retrieval (BM25 + dense, reciprocal rank fusion).
+"""Per-project paper corpus: chunking, Qwen3 embeddings and a multi-stage retrieval pipeline.
 
-Same retrieval recipe that scored best in Greenlight's legal RAG eval (weighted RRF of BM25 and Qwen3-Embedding-8B),
-applied to abstracts and full texts the agents chose to read. Vectors are Matryoshka-truncated to 1024 dims and
-stored as float16 next to each chunk. If embeddings are unavailable, retrieval degrades to BM25 instead of failing.
+  retrieve(query)
+    1. expand    Nemotron Nano writes 2 paraphrased queries + a HyDE passage (a hypothetical answer, embedded as a
+                 document) — cached per query
+    2. recall    BM25 and Qwen3-Embedding-8B dense search for every query variant, fused by weighted reciprocal rank
+                 fusion into a candidate pool (40)
+    3. rerank    cross-encoder over the pool only (rerank.py: NVIDIA NIM / vLLM endpoint / local bge-reranker / Nano)
+    4. gate      "enough evidence?" = top rerank score ≥ the threshold calibrated for that reranker by the eval
+    5. MMR       maximal marginal relevance over the reranked list, so k results are not k near-duplicates
+    6. context   ±1 neighbouring chunk attached to full-text hits (recovers sentences cut at chunk borders)
+Chunks carry a contextual header (paper title) before embedding. Vectors are Matryoshka-truncated to 1024 dims,
+float16. Every stage degrades instead of failing: no embeddings → BM25, no reranker → fused order, no calibration →
+no gate. Each stage can be switched off, which is how the retrieval eval measures what each one buys.
 """
 
+import asyncio
+import hashlib
 import math
 import re
+import time
 from collections import Counter
 
 import numpy as np
+from pydantic import BaseModel, Field
 
-from . import db, llm, trace
+from . import db, llm, rerank, trace
+from .config import settings
 
 DIMS = 1024
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9\-]+")
@@ -108,45 +122,173 @@ async def add_many(pid: str, items: list[tuple[str, str, str, str]]) -> int:
     return len(rows)
 
 
-async def search(pid: str, query: str, k: int = 8, paper_ids: list[str] | None = None,
-                 kinds: list[str] | None = None) -> list[dict]:
+class Expansion(BaseModel):
+    rewrites: list[str] = Field(description="2 alternative phrasings using different terminology / synonyms")
+    hyde: str = Field(description="A 3-4 sentence passage, as it would appear in a paper, that answers the query")
+
+
+EXPAND_SYSTEM = """You help search a corpus of scientific papers. For the query, write (1) two alternative search
+queries that use different terminology a paper might use (synonyms, older names, the technical term), and (2) a short
+hypothetical passage from a paper that would answer it (plausible wording; it is only used for matching)."""
+
+
+async def expand(query: str) -> Expansion | None:
+    key = "expand:" + hashlib.sha256(query.encode()).hexdigest()
+    if (hit := db.cache_get(key)) is not None:
+        return Expansion.model_validate(hit)
+    try:
+        e = await llm.chat_json("fast", EXPAND_SYSTEM, query, Expansion, title="Query expansion (multi-query + HyDE)",
+                                max_tokens=700, temperature=0.3)
+    except Exception as ex:
+        trace.error("Query expansion failed; using the original query only", str(ex)[:200])
+        return None
+    e.rewrites = e.rewrites[:2]
+    db.cache_put(key, e.model_dump())
+    return e
+
+
+def _bm25_for(pid: str, chunks: list[dict], tag: str) -> "BM25":
+    key = f"{pid}:{tag}"
+    cached = _bm25_cache.get(key)
+    if not cached or cached[0] != len(chunks):
+        cached = (len(chunks), BM25([c["text"] for c in chunks]))
+        _bm25_cache[key] = cached
+    return cached[1]
+
+
+_qcache: dict[tuple[str, bool], list[float]] = {}
+
+
+async def _embed_cached(texts: list[str], query: bool) -> list[list[float]]:
+    todo = [t for t in texts if (t, query) not in _qcache]
+    if todo:
+        for t, v in zip(todo, await llm.embed(todo, query=query, title=f"Embed {len(todo)} query text(s)")):
+            _qcache[(t, query)] = v
+    if len(_qcache) > 5000:
+        _qcache.clear()
+    return [_qcache[(t, query)] for t in texts if (t, query) in _qcache]
+
+
+def _mmr(cands: list[int], rel: list[float], vecs: list, k: int, lam: float = 0.75) -> list[int]:
+    """Greedy maximal marginal relevance over candidate positions (rel normalised to 0..1)."""
+    if len(cands) <= k or any(vecs[i] is None for i in cands):
+        return cands[:k]
+    lo, hi = min(rel), max(rel)
+    norm = [(r - lo) / (hi - lo) if hi > lo else 1.0 for r in rel]
+    chosen: list[int] = []
+    left = list(range(len(cands)))
+    while left and len(chosen) < k:
+        def gain(j):
+            if not chosen:
+                return norm[j]
+            sim = max(float(vecs[cands[j]] @ vecs[cands[c]]) for c in chosen)
+            return lam * norm[j] - (1 - lam) * sim
+        best = max(left, key=gain)
+        chosen.append(best)
+        left.remove(best)
+    return [cands[j] for j in chosen]
+
+
+async def retrieve(pid: str, query: str, k: int = 8, paper_ids: list[str] | None = None, kinds: list[str] | None = None,
+                   *, expand_query: bool | None = None, use_dense: bool = True, use_bm25: bool = True,
+                   use_rerank: bool = True, use_mmr: bool = True, neighbours: bool = True, pool: int = 40,
+                   reranker: str | None = None) -> dict:
+    """Multi-stage retrieval. Returns {hits, sufficient, reranker, top_score, threshold, queries, n_candidates, ms}."""
+    t0 = time.perf_counter()
     chunks = db.chunks(pid)
+    by_id = {c["id"]: c for c in chunks}
     if paper_ids:
         wanted = {p.upper() for p in paper_ids}
         chunks = [c for c in chunks if c["paper_id"] in wanted]
     if kinds:
         chunks = [c for c in chunks if c["kind"] in kinds]
+    out = {"hits": [], "sufficient": None, "reranker": "none", "top_score": None, "threshold": None,
+           "queries": [query], "n_candidates": 0}
     if not chunks:
-        return []
-    key = f"{pid}:{','.join(sorted(paper_ids or []))}:{','.join(kinds or [])}"
-    cached = _bm25_cache.get(key)
-    if not cached or cached[0] != len(chunks):
-        cached = (len(chunks), BM25([c["text"] for c in chunks]))
-        _bm25_cache[key] = cached
-    bm = cached[1].scores(query)
-    ranks = {}
-    order = np.argsort(-bm)
-    for r, i in enumerate(order[:60]):
-        if bm[i] > 0:
-            ranks.setdefault(int(i), 0.0)
-            ranks[int(i)] += 0.6 / (60 + r)          # BM25 weight
-    have_vec = [i for i, c in enumerate(chunks) if c["vec"] is not None]
-    if have_vec:
+        out["sufficient"] = False
+        return out
+
+    # 1. expand
+    do_expand = settings.query_expansion if expand_query is None else expand_query
+    exp = None
+    if do_expand:  # speculative: wait at most the deadline; a late expansion still lands in the cache for next time
+        task = asyncio.ensure_future(expand(query))
         try:
-            qv = _norm(np.asarray((await llm.embed([query], query=True, title="Embed query"))[0], dtype=np.float32))
-            mat = np.stack([chunks[i]["vec"][:DIMS] for i in have_vec])
-            if mat.shape[1] == qv.shape[0]:
-                sims = mat @ qv
-                for r, j in enumerate(np.argsort(-sims)[:60]):
-                    i = have_vec[int(j)]
-                    ranks.setdefault(i, 0.0)
-                    ranks[i] += 1.0 / (60 + r)        # dense weight
+            exp = await asyncio.wait_for(asyncio.shield(task), timeout=settings.expansion_deadline_s)
+        except asyncio.TimeoutError:
+            out["expansion"] = "deadline missed"
+    variants = [(query, 1.0)] + [(q, 0.5) for q in (exp.rewrites if exp else [])]
+    out["queries"] = [q for q, _ in variants]
+
+    # 2. recall: weighted RRF over BM25 + dense for every variant (+ HyDE as a document-side vector)
+    fused: dict[int, float] = {}
+
+    def add(order, weight):
+        for r, i in enumerate(order[:80]):
+            fused[int(i)] = fused.get(int(i), 0.0) + weight / (60 + r)
+    if use_bm25:
+        bm = _bm25_for(pid, chunks, f"{','.join(sorted(paper_ids or []))}:{','.join(kinds or [])}")
+        for q, w in variants:
+            sc = bm.scores(q)
+            add([i for i in np.argsort(-sc) if sc[i] > 0], 0.6 * w)
+    have = [i for i, c in enumerate(chunks) if c["vec"] is not None]
+    if use_dense and have:
+        try:
+            qv = await _embed_cached([q for q, _ in variants], True)
+            hv = await _embed_cached([exp.hyde], False) if exp and exp.hyde else []
+            mat = np.stack([chunks[i]["vec"][:DIMS] for i in have])
+            for vec, w in [(v, w) for v, (_, w) in zip(qv, variants)] + [(v, 0.8) for v in hv]:
+                v = _norm(np.asarray(vec, dtype=np.float32))
+                if mat.shape[1] == v.shape[0]:
+                    add([have[int(j)] for j in np.argsort(-(mat @ v))], 1.0 * w)
         except Exception as e:
             trace.error("Dense retrieval failed; using BM25 only", str(e)[:300])
-    best = sorted(ranks.items(), key=lambda kv: -kv[1])[:k]
-    out = []
-    for i, s in best:
+    cands = [i for i, _ in sorted(fused.items(), key=lambda kv: -kv[1])][:pool]
+    out["n_candidates"] = len(cands)
+    if not cands:
+        out["sufficient"] = False
+        return out
+
+    # 3. rerank the pool only (never the whole corpus)
+    rel = [fused[i] for i in cands]
+    if use_rerank:
+        scores, kind = await rerank.rerank(query, [chunks[i]["text"] for i in cands], prefer=reranker)
+        if kind != "none":
+            order = sorted(range(len(cands)), key=lambda j: -scores[j])
+            cands, rel = [cands[j] for j in order], [scores[j] for j in order]
+            out["reranker"] = kind
+            out["top_score"] = round(rel[0], 4)
+            # 4. gate, with the threshold measured for this backend
+            thr = rerank.threshold(kind)
+            out["threshold"] = thr
+            out["sufficient"] = None if thr is None else rel[0] >= thr
+
+    # 5. diversity
+    vecs = [c["vec"][:DIMS] if c["vec"] is not None else None for c in chunks]
+    vecs = [(_norm(v) if v is not None else None) for v in vecs]
+    pos = {i: j for j, i in enumerate(cands)}
+    picked = _mmr(cands[:max(k * 3, 15)], rel[:max(k * 3, 15)], vecs, k) if use_mmr else cands[:k]
+
+    # 6. neighbour context for full-text chunks
+    for i in picked:
         c = chunks[i]
-        out.append({"chunk_id": c["id"], "paper_id": c["paper_id"], "kind": c["kind"], "score": round(s, 4),
-                    "text": c["text"][:1800]})
+        hit = {"chunk_id": c["id"], "paper_id": c["paper_id"], "kind": c["kind"],
+               "score": round(rel[pos[i]], 4), "text": c["text"][:1800]}
+        m = re.match(r"(P\d+)#f(\d+)$", c["id"])
+        if neighbours and m:
+            n = int(m.group(2))
+            before, after = by_id.get(f"{m.group(1)}#f{n - 1}"), by_id.get(f"{m.group(1)}#f{n + 1}")
+            if before:
+                hit["before"] = before["text"][-350:]
+            if after:
+                hit["after"] = after["text"][:350]
+        out["hits"].append(hit)
+    out["ms"] = int((time.perf_counter() - t0) * 1000)
     return out
+
+
+async def search(pid: str, query: str, k: int = 8, paper_ids: list[str] | None = None,
+                 kinds: list[str] | None = None, **kw) -> list[dict]:
+    """Hits only (see retrieve). Internal callers skip query expansion (one extra LLM call) unless they ask for it."""
+    kw.setdefault("expand_query", False)
+    return (await retrieve(pid, query, k, paper_ids, kinds, **kw))["hits"]

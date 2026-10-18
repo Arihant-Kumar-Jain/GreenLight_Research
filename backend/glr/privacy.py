@@ -29,6 +29,7 @@ SECRET_RES = [
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"),
     re.compile(r"\bhf_[A-Za-z0-9]{30,}\b"),
+    re.compile(r"\bnvapi-[A-Za-z0-9_\-]{20,}"),
     re.compile(r"\bxox[abpr]-[A-Za-z0-9\-]{10,}"),
     re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"),
     re.compile(r"(?i)(?<=bearer )[A-Za-z0-9._\-]{16,}"),
@@ -144,7 +145,8 @@ def scrub_secrets(text: str | None, _count=None) -> str:
     if not text:
         return text or ""
     for key in (settings.nebius_api_key, settings.openrouter_api_key, settings.tavily_api_key,
-                settings.openalex_api_key, settings.s2_api_key, settings.hf_token):
+                settings.openalex_api_key, settings.s2_api_key, settings.hf_token, settings.nvidia_api_key,
+                settings.rerank_key):
         if key and len(key) >= 8 and key in text:
             text = text.replace(key, "[SECRET]")
             if _count:

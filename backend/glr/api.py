@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import db, graph, llm, papers, pipeline, privacy, providers, web
+from . import db, evals, graph, llm, papers, pipeline, privacy, providers, rerank, web
 from .agents import chat, intake
 from .config import REPO_DIR, missing_keys, settings
 from .privacy import scrub_secrets
@@ -33,6 +33,8 @@ def _project_or_404(pid: str) -> dict:
 @app.get("/api/health")
 async def health():
     out = {"missing_keys": missing_keys(), "llm_provider": llm.provider_label(),
+           "rerankers": {"chain": rerank.chain(), "calibrated": {k: v.get("threshold") for k, v in rerank.calibration().items()},
+                         "local_model": rerank.default_local_model() if "local" in rerank.available() else None}, "query_expansion": settings.query_expansion,
            "tavily_key": bool(settings.tavily_api_key), "s2_key": bool(settings.s2_api_key),
            "openalex_polite": bool(settings.openalex_mailto),
            "budget_usd_per_run": settings.max_usd_per_run, "research_rounds": settings.max_research_rounds,
@@ -156,7 +158,8 @@ def _paper_row(p: dict) -> dict:
             "venue": (p.get("venue") or {}).get("name"), "citations": p.get("citations"),
             "retracted": bool(p.get("is_retracted")), "found_by": p.get("found_by", []), "sources": p.get("sources", []),
             "credibility": c or None, "audit": p.get("audit"), "hf": p.get("hf"),
-            "read": bool(p.get("fulltext")), "abstract": (p.get("abstract") or "")[:1200]}
+            "read": bool(p.get("fulltext")), "abstract": (p.get("abstract") or "")[:1200],
+            "relevance": p.get("relevance"), "relevance_by": p.get("relevance_by")}
 
 
 @app.get("/api/projects/{pid}")
@@ -218,6 +221,26 @@ class Pair(BaseModel):
 async def explain_pair(pid: str, body: Pair):
     _project_or_404(pid)
     return {"text": await graph.explain(pid, body.a.upper(), body.b.upper(), body.facts[:600])}
+
+
+# ---------------------------------------------------------------- proof: retrieval eval
+
+_eval_task: asyncio.Task | None = None
+
+
+@app.get("/api/evals")
+async def get_evals():
+    return {**evals.results(), "running": bool(_eval_task and not _eval_task.done())}
+
+
+@app.post("/api/evals/retrieval/{pid}")
+async def run_retrieval_eval(pid: str, rebuild: bool = False):
+    global _eval_task
+    _project_or_404(pid)
+    if _eval_task and not _eval_task.done():
+        raise HTTPException(409, "An eval is already running")
+    _eval_task = asyncio.create_task(evals.run(pid, rebuild=rebuild))
+    return {"started": True}
 
 
 # ---------------------------------------------------------------- research chat (to-and-fro)

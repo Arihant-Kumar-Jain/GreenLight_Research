@@ -72,6 +72,7 @@ export default function ChatView({ p, events, onBusy }: { p: Project; events: Tr
                   <span className="inline-flex items-center gap-1"><Wrench size={11} />{m.data.tool_calls} tool call(s)</span>
                   {m.data.budget && <span>${m.data.budget.usd.toFixed(4)} · {m.data.budget.elapsed_s}s</span>}
                   {m.data.context && m.data.context.compressions > 0 && <span>context compressed ×{m.data.context.compressions}</span>}
+                  {m.data.citations && <span>citations checked: {m.data.citations.supported} supported{m.data.citations.partial ? `, ${m.data.citations.partial} partial` : ''}{m.data.citations.unsupported ? `, ${m.data.citations.unsupported} unsupported` : ''}</span>}
                 </div>
               )}
             </div>

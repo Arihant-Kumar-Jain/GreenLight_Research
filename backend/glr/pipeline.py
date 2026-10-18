@@ -14,7 +14,7 @@ import traceback
 from . import db, graph, papers, trace
 from .budget import Budget
 from .config import settings
-from .agents import auditor, chamber, novelty, planner, research, verdict, writer
+from .agents import auditor, chamber, novelty, planner, research, toolbox, verdict, writer
 from .privacy import scrub_secrets
 
 _running: dict[str, asyncio.Task] = {}
@@ -49,6 +49,12 @@ async def run(pid: str) -> None:
             db.update_project(pid, stats={"review": review}, stage="credibility")
 
             closest = [c["id"] for c in review.get("closest", [])]
+            # cross-encoder triage of everything collected (papers found before triage existed, or via other paths)
+            with trace.scope(agent="Relevance Ranker"):
+                untriaged = [x["id"] for x in db.papers(pid) if x.get("relevance") is None]
+                for i in range(0, len(untriaged), 40):
+                    await toolbox.triage(pid, untriaged[i:i + 40])
+            by_rel = [x["id"] for x in sorted(db.papers(pid), key=lambda x: -(x.get("relevance") or 0))]
             deep = closest[:settings.papers_to_read]
             # Deep read: the decisive papers' full texts, so audits and novelty quotes check against more than abstracts
             with trace.scope(agent="Reader"):
@@ -64,13 +70,15 @@ async def run(pid: str) -> None:
 
             with trace.scope(agent="Credibility Scorer"):
                 all_ids = [x["id"] for x in db.papers(pid)]
-                ranked = closest + [i for i in all_ids if i not in closest]
+                ranked = list(dict.fromkeys(closest + by_rel + all_ids))
                 await papers.enrich(pid, ranked[:80])
             await auditor.audit(pid, deep)
 
             db.update_project(pid, stage="novelty")
+            # novelty-map the lead's closest work plus anything the cross-encoder rates very relevant that it missed
+            missed = [i for i in by_rel[:12] if i not in closest and (db.paper(pid, i) or {}).get("relevance", 0) >= 0.8]
             mapped = list(dict.fromkeys(deep + [c["id"] for c in review.get("closest", [])
-                                                if c["relation"] in ("same idea", "very close")]))[:10]
+                                                if c["relation"] in ("same idea", "very close")] + missed[:3]))[:12]
             nov = await novelty.analyse(pid, plan, mapped)
             db.update_project(pid, novelty=nov, stage="chamber")
 

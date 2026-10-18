@@ -39,6 +39,26 @@ Quote the paper verbatim for every partial/full (copy a fragment of 8-30 words e
 WEIGHT = {"full": 1.0, "partial": 0.5, "none": 0.0, "unverified": 0.0}
 
 
+class Strict(BaseModel):
+    verdict: Literal["full", "partial", "none"]
+    why: str = Field(description="At most 20 words")
+
+
+STRICT_SYSTEM = """You are a strict area chair double-checking a claimed overlap between a research idea's component and a
+prior paper. "full" ONLY if the paper does the same thing in an equivalent setting (same kind of data/task/modality
+and the same mechanism). Same mechanism in a different setting (e.g. vision-language instead of text-only, a
+different benchmark family) is "partial". Judge only from the quote and passages."""
+
+
+async def _strict(plan_summary: str, comp: str, paper_title: str, quote: str, context: str) -> Strict | None:
+    try:
+        return await llm.chat_json("fast", STRICT_SYSTEM, f"Idea: {plan_summary}\nComponent: {comp}\n\nPaper: "
+                                   f"{paper_title}\nQuote: \"{quote}\"\nPassages:\n{context[:5000]}", Strict,
+                                   title="Strict check of a 'full' overlap", max_tokens=300, temperature=0.0)
+    except Exception:
+        return None
+
+
 async def map_paper(pid: str, plan: Plan, paper_id: str) -> dict | None:
     p = db.paper(pid, paper_id)
     if not p:
@@ -60,6 +80,7 @@ async def map_paper(pid: str, plan: Plan, paper_id: str) -> dict | None:
         trace.error(f"Novelty mapping failed for {paper_id}", str(e)[:300])
         return None
     full = paper_text(pid, paper_id)
+    comp_text = {c.id: c.text for c in plan.components}
     cells = {}
     for cell in m.cells:
         d = cell.model_dump()
@@ -69,6 +90,14 @@ async def map_paper(pid: str, plan: Plan, paper_id: str) -> dict | None:
                 d["claimed"] = d["overlap"]
                 d["overlap"] = "unverified"
         cells[d["component"]] = d
+    # second, stricter judge on every verified "full": same mechanism in another setting is only "partial"
+    fulls = [d for d in cells.values() if d["overlap"] == "full"]
+    checks = await asyncio.gather(*(_strict(plan.summary, comp_text.get(d["component"], ""), p.get("title", ""),
+                                            d["quote"], "\n\n".join(parts)) for d in fulls))
+    for d, chk in zip(fulls, checks):
+        if chk and chk.verdict != "full":
+            d["strict"] = {"verdict": chk.verdict, "why": chk.why}
+            d["overlap"] = "partial" if chk.verdict == "partial" else "none"
     return {"paper_id": paper_id, "relation": m.relation, "difference": m.difference,
             "cells": [cells.get(c.id, {"component": c.id, "overlap": "none", "quote": "", "note": ""})
                       for c in plan.components]}
@@ -103,7 +132,9 @@ async def analyse(pid: str, plan: Plan, paper_ids: list[str]) -> dict:
             if core_ids and all(cid in full for cid in core_ids):
                 done_by.append({"paper_id": r["paper_id"], "credibility": cred.get(r["paper_id"])})
         unverified = sum(x["overlap"] == "unverified" for r in rows for x in r["cells"])
+        strict = sum(bool(x.get("strict")) for r in rows for x in r["cells"])
         trace.log("guard", f"Novelty score {score}/100; {len(done_by)} paper(s) cover all core components",
-                  f"{unverified} overlap claim(s) downgraded: quote not found in the paper")
+                  f"{unverified} overlap claim(s) downgraded: quote not found in the paper; {strict} 'full' claim(s) "
+                  "downgraded by the strict second judge (same mechanism, different setting)")
         return {"components": comps, "papers": rows, "score": score, "already_done_by": done_by,
-                "unverified_claims": unverified}
+                "unverified_claims": unverified, "strict_downgrades": strict}

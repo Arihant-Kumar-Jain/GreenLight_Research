@@ -105,7 +105,7 @@ export default function PapersView({ p, onOpen }: { p: Project; onOpen: (id: str
   const rows = useMemo(() => {
     const r = p.papers.filter((x) => !q || `${x.title} ${x.authors.join(' ')}`.toLowerCase().includes(q.toLowerCase()))
     const key = (x: Paper) => sort === 'credibility' ? -(x.credibility?.score ?? -1) : sort === 'citations' ? -(x.citations ?? -1)
-      : sort === 'year' ? -(x.year ?? 0) : (rel.get(x.id)?.rank ?? 100) * 1000 - (x.credibility?.score ?? 0)
+      : sort === 'year' ? -(x.year ?? 0) : (rel.get(x.id)?.rank ?? 100) * 1000 - (x.relevance ?? 0) * 100
     return [...r].sort((a, b) => key(a) - key(b))
   }, [p.papers, q, sort, rel])
 
@@ -135,6 +135,7 @@ export default function PapersView({ p, onOpen }: { p: Project; onOpen: (id: str
                   {x.retracted && <Badge tone="stop">retracted</Badge>}
                   {x.audit?.flags.some((f) => f.verified) && <Badge tone="stop">red flags</Badge>}
                   {x.read && <Badge tone="info">read</Badge>}
+                  {x.relevance != null && <Badge tone={x.relevance >= 0.8 ? 'go' : x.relevance >= 0.4 ? 'wait' : 'neutral'} title={`Cross-encoder relevance to your idea (${x.relevance_by})`}>relevance {Math.round(x.relevance * 100)}%</Badge>}
                 </div>
                 <div className="mt-1 font-medium leading-snug">{x.title}</div>
                 <div className="mt-0.5 text-xs text-muted">

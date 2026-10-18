@@ -200,7 +200,7 @@ async def read(pid: str, paper_id: str) -> dict:
     if len(text) < 1500:
         return {"error": "no_fulltext", "detail": "Full text not reachable; work from the abstract."}
     text = re.sub(r"\n{3,}", "\n\n", text)[:120000]
-    n = await corpus.add_text(pid, paper_id, "fulltext", text)
+    n = await corpus.add_text(pid, paper_id, "fulltext", text, prefix=f"[{p['title'][:120]}] ")  # contextual header
     info = {"chars": len(text), "chunks": n, "via": via}
     db.update_paper(pid, paper_id, fulltext=info)
     trace.source(f"Read full text of {paper_id} via {via}", f"{len(text):,} chars → {n} chunks", provider=via)

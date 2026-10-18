@@ -94,3 +94,40 @@ def test_graph_cites_and_clusters():
     assert {(e["source"], e["target"]) for e in edges} == {("P1", "P2"), ("P3", "P1")}
     assign, clusters = graph._clusters(nodes, edges)
     assert len(set(assign.values())) == 1 and clusters[0]["size"] == 3
+
+
+def test_calibration_and_auroc():
+    from glr.evals import _auroc, _calibrate
+    pos, neg = [0.9, 0.8, 0.7, 0.4], [0.1, 0.2, 0.5]
+    c = _calibrate(pos, neg)
+    assert c["auroc"] == _auroc(pos, neg) and 0.8 < c["auroc"] <= 1
+    assert c["threshold"] == 0.7 and c["balanced_accuracy"] >= 0.8
+
+
+def test_mmr_prefers_diverse():
+    import numpy as np
+    from glr.corpus import _mmr
+    a, b = np.array([1.0, 0.0]), np.array([0.0, 1.0])
+    vecs = [a, a.copy(), b, b.copy()]  # 0/1 duplicates; 2 is different and nearly as relevant; 3 is weak
+    assert _mmr([0, 1, 2, 3], [1.0, 0.99, 0.95, 0.1], vecs, 2) == [0, 2]
+
+
+async def test_rerank_falls_back(monkeypatch):
+    from glr import rerank
+
+    async def boom(q, d):
+        raise RuntimeError("down")
+
+    async def ok(q, d):
+        return [float(len(x)) for x in d]
+    monkeypatch.setitem(rerank.BACKENDS, "nim", boom)
+    monkeypatch.setitem(rerank.BACKENDS, "llm", ok)
+    monkeypatch.setattr(rerank, "chain", lambda: ["nim", "llm"])
+    scores, kind = await rerank.rerank("q", ["a", "bbb"])
+    assert kind == "llm" and scores == [1.0, 3.0]
+
+
+def test_normalise():
+    from glr.rerank import normalise
+    assert normalise([10, 0], "llm") == [1.0, 0.0]
+    assert 0.99 < normalise([5.0], "nim")[0] < 1 and normalise([0.3], "local") == [0.3]

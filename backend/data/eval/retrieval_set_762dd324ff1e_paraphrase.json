@@ -1,0 +1,261 @@
+{
+ "project": "762dd324ff1e",
+ "created": "2026-10-18T12:39:20.487864+00:00",
+ "synthetic": true,
+ "positives": [
+  {
+   "question": "How does MoLoRA achieve composable specialization of adapters across multiple domains?",
+   "gold": "P122#f21",
+   "paper": "P122",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How does the auxiliary load balance loss affect expert imbalance in MixLoRA and MixDoRA?",
+   "gold": "P66#f35",
+   "paper": "P66",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How does LD-MoLE differ from conventional TopK routing in Mixture of Experts for LLMs?",
+   "gold": "P42#f2",
+   "paper": "P42",
+   "kind": "fulltext"
+  },
+  {
+   "question": "What performance metric improves when using predicted \u03bb values compared to fixed \u03bb values in the LD-MoLE model with Qwen3-1.7B?",
+   "gold": "P42#f37",
+   "paper": "P42",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How does MoLoRA achieve per-token routing and what performance gain does it provide compared to per-sequence routing?",
+   "gold": "P122#f2",
+   "paper": "P122",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How does LoRA-Mixer enhance modular language model construction?",
+   "gold": "P79#f6",
+   "paper": "P79",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How are the updated weights calculated in LoRA according to equation (1)",
+   "gold": "P66#f13",
+   "paper": "P66",
+   "kind": "fulltext"
+  },
+  {
+   "question": "Which selection strategy yields the highest performance on GSM8K according to the passage?",
+   "gold": "P25#f21",
+   "paper": "P25",
+   "kind": "fulltext"
+  },
+  {
+   "question": "What training approach does LLaVA-1.5 use to efficiently adapt large multimodal language models?",
+   "gold": "P7#f4",
+   "paper": "P7",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How much did RSL improve over GMoE on the SST-2 task?",
+   "gold": "P79#f35",
+   "paper": "P79",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How does Tsallis entropy address limitations of traditional uncertainty measures in router selection?",
+   "gold": "P10#f17",
+   "paper": "P10",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How does Tsallis entropy relate to Shannon entropy as q approaches 1",
+   "gold": "P10#f18",
+   "paper": "P10",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How does the expert capacity setting differ from previous approaches when applied to instruction data?",
+   "gold": "P7#f17",
+   "paper": "P7",
+   "kind": "fulltext"
+  },
+  {
+   "question": "How many LoRA modules were fine-tuned across model architectures in the LoRALib benchmark?",
+   "gold": "P25#f2",
+   "paper": "P25",
+   "kind": "fulltext"
+  },
+  {
+   "question": "What does LACE use to combine the gold-label residual mean from the labeled subset with a cheap-signal mean from the full item pool?",
+   "gold": "P76#abs",
+   "paper": "P76",
+   "kind": "abstract"
+  },
+  {
+   "question": "How many parameters does GC-MoE train on top of frozen expert weights",
+   "gold": "P52#abs",
+   "paper": "P52",
+   "kind": "abstract"
+  },
+  {
+   "question": "Which LoRA adapter configurations dominate the Pareto front across quality, latency and memory metrics?",
+   "gold": "P155#abs",
+   "paper": "P155",
+   "kind": "abstract"
+  },
+  {
+   "question": "Under what conditions does LoRA achieve lower excess risk than full fine-tuning in linear regression settings?",
+   "gold": "P96#abs",
+   "paper": "P96",
+   "kind": "abstract"
+  },
+  {
+   "question": "What type of load balancing schemes are presented in the study based on SLA requirements?",
+   "gold": "P17#abs",
+   "paper": "P17",
+   "kind": "abstract"
+  },
+  {
+   "question": "How much performance improvement does LightMoE achieve at a 50% compression rate compared to existing methods?",
+   "gold": "P80#abs",
+   "paper": "P80",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does Mixture-of-LoRAs combine multiple domain-specific LoRA modules to enhance multi-task learning performance?",
+   "gold": "P130#abs",
+   "paper": "P130",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does MiLoRA reduce latency compared to previous LoRA-based methods in multi-tenant settings?",
+   "gold": "P93#abs",
+   "paper": "P93",
+   "kind": "abstract"
+  },
+  {
+   "question": "What percentage of parameters does PRISM-Med use compared to traditional fine-tuning approaches?",
+   "gold": "P153#abs",
+   "paper": "P153",
+   "kind": "abstract"
+  },
+  {
+   "question": "How much end-to-end MoE training speedup does TAOT achieve compared to existing methods?",
+   "gold": "P166#abs",
+   "paper": "P166",
+   "kind": "abstract"
+  },
+  {
+   "question": "What performance improvement does RepLoRA achieve with limited data compared to vanilla LoRA?",
+   "gold": "P90#abs",
+   "paper": "P90",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does LoRA rank affect ROUGE-1 performance in medical text summarization with Flan-T5?",
+   "gold": "P99#abs",
+   "paper": "P99",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does LoRA reduce trainable parameters while maintaining or enhancing performance?",
+   "gold": "P161#abs",
+   "paper": "P161",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does ForgeDreamer address knowledge interference between category-specific LoRA models in industrial text-to-3D generation?",
+   "gold": "P47#abs",
+   "paper": "P47",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does the token-level generalization of LoRA backdoors differ from structural pattern generalization?",
+   "gold": "P141#abs",
+   "paper": "P141",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does the proposed loss\u2011free balancing method maintain expert load balance without introducing auxiliary loss gradients?",
+   "gold": "P118#abs",
+   "paper": "P118",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does DMoLE combine LoRA modules with a gate network to reduce trainable parameters while maintaining spam detection performance?",
+   "gold": "P110#abs",
+   "paper": "P110",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does the routing mechanism in Mixture of Experts determine which expert models process each input?",
+   "gold": "P151#abs",
+   "paper": "P151",
+   "kind": "abstract"
+  },
+  {
+   "question": "How much does AdvFusion improve over AdapterFusion on code summarization and method name prediction tasks?",
+   "gold": "P85#abs",
+   "paper": "P85",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does the proposed method estimate token-level reward signals without additional training?",
+   "gold": "P145#abs",
+   "paper": "P145",
+   "kind": "abstract"
+  },
+  {
+   "question": "What is the average AUC improvement achieved by HiLoMoE over the non-MoE baseline?",
+   "gold": "P27#abs",
+   "paper": "P27",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does AutoBench improve evaluation reliability compared to single-judge baselines?",
+   "gold": "P78#abs",
+   "paper": "P78",
+   "kind": "abstract"
+  },
+  {
+   "question": "How does AMULET improve robustness against post-processing attacks in audio spoofing detection compared to full fine-tuning?",
+   "gold": "P91#abs",
+   "paper": "P91",
+   "kind": "abstract"
+  },
+  {
+   "question": "What method does the passage propose to automatically identify where LoRA adapters should be placed in a pretrained model for finetuning?",
+   "gold": "P138#abs",
+   "paper": "P138",
+   "kind": "abstract"
+  },
+  {
+   "question": "What specific capability do the agent's self-assessment methods enable in the proposed load balancing strategy?",
+   "gold": "P124#abs",
+   "paper": "P124",
+   "kind": "abstract"
+  },
+  {
+   "question": "How much does MASA improve average accuracy on the MMLU benchmark compared to standard LoRA?",
+   "gold": "P50#abs",
+   "paper": "P50",
+   "kind": "abstract"
+  }
+ ],
+ "negatives": [
+  "In evolutionary biology, how does the genetic architecture of gene regulatory networks influence phenotypic plasticity?",
+  "What are the economic impacts of transitioning to a carbon-neutral energy grid on global commodity markets?",
+  "How can the detection of high-energy cosmic neutrinos inform our understanding of astrophysical black hole formation processes?",
+  "What is the role of polymer molecular weight distribution on the mechanical properties of biodegradable tissue scaffolds?",
+  "How does the variation in urban green space distribution affect socioeconomic inequality metrics in metropolitan areas?",
+  "What are the implications of gravitational wave polarization modes on the accuracy of dark matter halo mass estimations?",
+  "How does the incorporation of quantum entanglement in quantum computing error correction affect fault tolerance thresholds?",
+  "What is the relationship between soil microbial diversity and resilience to invasive plant species in temperate ecosystems?",
+  "How does the optimization of renewable energy storage systems influence the stability of regional power grids during extreme weather events?",
+  "What are the effects of electromagnetic interference on the navigation accuracy of migratory marine species in changing oceanic conditions?",
+  "How does the integration of real-time traffic flow models affect the scalability of autonomous vehicle fleets in megacities?",
+  "What is the impact of microplastic accumulation on the bioaccumulation of heavy metals in marine food webs?"
+ ]
+}
