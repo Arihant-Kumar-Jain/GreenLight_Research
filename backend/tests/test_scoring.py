@@ -131,3 +131,17 @@ def test_normalise():
     from glr.rerank import normalise
     assert normalise([10, 0], "llm") == [1.0, 0.0]
     assert 0.99 < normalise([5.0], "nim")[0] < 1 and normalise([0.3], "local") == [0.3]
+
+
+def test_guardrail_review_coverage_blocks_green():
+    pid = db.create_project("idea3")
+    for i in range(12):
+        db.add_paper(pid, f"k{i}", {"title": f"t{i}", "credibility": {"score": 60}})
+    nov = {"already_done_by": [], "components": [{"id": "C1", "core": True, "best": "partial", "covered_by": []},
+                                                  {"id": "C2", "core": True, "best": "partial", "covered_by": []}]}
+    lead = {"confidence": "high", "closest": [{"id": "P1", "relation": "very close"}],
+            "coverage": [{"component": "C1", "status": "covered"}, {"component": "C2", "status": "covered"}]}
+    v = verdict.apply(pid, {"light": "green", "headline": "Go", "reasons": []}, nov, lead)
+    assert v["light"] == "amber" and "every core component" in v["headline"]
+    lead["coverage"][1]["status"] = "open"
+    assert verdict.apply(pid, {"light": "green", "headline": "Go", "reasons": []}, nov, lead)["light"] == "green"

@@ -44,10 +44,14 @@ class Strict(BaseModel):
     why: str = Field(description="At most 20 words")
 
 
-STRICT_SYSTEM = """You are a strict area chair double-checking a claimed overlap between a research idea's component and a
-prior paper. "full" ONLY if the paper does the same thing in an equivalent setting (same kind of data/task/modality
-and the same mechanism). Same mechanism in a different setting (e.g. vision-language instead of text-only, a
-different benchmark family) is "partial". Judge only from the quote and passages."""
+STRICT_SYSTEM = """You are an area chair double-checking a claimed FULL overlap between one component of a research idea
+and a prior paper. First decide what the component is about:
+- a MECHANISM (architecture, routing, loss, training procedure): the paper fully covers it if it uses the same
+  mechanism, in ANY domain or modality. Do not downgrade for a different dataset or modality.
+- a SETTING (specific data, benchmarks, domain, evaluation): the paper fully covers it only if it uses an equivalent
+  setting; same mechanism in another setting is "partial".
+Downgrade only when the passages clearly show the paper does something different. If unsure, keep "full".
+Judge only from the quote and passages."""
 
 
 async def _strict(plan_summary: str, comp: str, paper_title: str, quote: str, context: str) -> Strict | None:
@@ -75,7 +79,7 @@ async def map_paper(pid: str, plan: Plan, paper_id: str) -> dict | None:
     try:
         m = await llm.chat_json("reason", SYSTEM, f"Idea: {plan.summary}\nComponents:\n{comps}\n\nPaper {paper_id}:\n"
                                 + "\n\n".join(parts)[:16000], PaperMap, title=f"Novelty map vs {paper_id}",
-                                max_tokens=2500)
+                                max_tokens=2500, temperature=0.0)
     except Exception as e:
         trace.error(f"Novelty mapping failed for {paper_id}", str(e)[:300])
         return None
@@ -95,6 +99,8 @@ async def map_paper(pid: str, plan: Plan, paper_id: str) -> dict | None:
     checks = await asyncio.gather(*(_strict(plan.summary, comp_text.get(d["component"], ""), p.get("title", ""),
                                             d["quote"], "\n\n".join(parts)) for d in fulls))
     for d, chk in zip(fulls, checks):
+        if chk and chk.verdict == "none":  # contradiction with a verified quote: treat as partial, never erase it
+            chk.verdict = "partial"
         if chk and chk.verdict != "full":
             d["strict"] = {"verdict": chk.verdict, "why": chk.why}
             d["overlap"] = "partial" if chk.verdict == "partial" else "none"

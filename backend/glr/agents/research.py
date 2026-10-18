@@ -149,6 +149,10 @@ async def run(pid: str, brief: dict, plan: Plan, budget: Budget) -> dict:
     async def review(out: dict) -> str | None:
         n_papers = len(db.papers(pid))
         problems = []
+        if rounds["n"] < min(2, settings.max_research_rounds):
+            problems.append("Round 1 is never final: dispatch a targeted second round. Walk citation_graph(direction="
+                            "'citing') from the closest papers, and search each component you marked covered or open "
+                            "with new synonyms, to catch the closest prior work you may have missed.")
         if n_papers < 8:
             problems.append(f"Only {n_papers} papers collected: search wider (synonyms, other sources).")
         if len(out.get("closest") or []) < 3:
@@ -163,7 +167,8 @@ async def run(pid: str, brief: dict, plan: Plan, budget: Budget) -> dict:
             v = await llm.chat_json("fast", CRITIC_SYSTEM,
                                     f"{idea_txt}\n\nNotebook:\n{toolbox.notebook_text(pid, 40)}\n\n"
                                     f"Lead's result:\n{json.dumps(out, ensure_ascii=False)[:9000]}",
-                                    CriticVerdict, title="Critic: review literature coverage", max_tokens=1200)
+                                    CriticVerdict, title="Critic: review literature coverage", max_tokens=1200,
+                                    temperature=0.0)
             trace.log("guard", "Critic approved the review" if v.approve else "Critic rejected: another round",
                       v.feedback)
             return None if v.approve else v.feedback

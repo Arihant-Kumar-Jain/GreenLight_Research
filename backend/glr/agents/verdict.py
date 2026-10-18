@@ -5,6 +5,9 @@
   - Any core component fully covered by credible verified prior work → capped at AMBER.
   - Thin evidence (few papers found, or the review's confidence is low) → capped at AMBER: never a green on a
     search that could have missed the prior work.
+  - The Lead Researcher's own coverage map says every core component is already covered and it found "same idea" /
+    "very close" papers → at least AMBER. (A Nebius run went GREEN because the novelty matrix's strict judge
+    downgraded every overlap while the review itself said the core was covered.)
 """
 
 from .. import db, trace
@@ -41,6 +44,13 @@ def apply(pid: str, ruling: dict, novelty: dict, lead: dict) -> dict:
                                                      if x["overlap"] == "full"):
             at_least("amber", f"Core component {c['id']} ('{c['text'][:80]}') is already done by credible prior work.")
             break
+    core = [c["id"] for c in novelty.get("components", []) if c.get("core")] or \
+        [c["id"] for c in novelty.get("components", [])]
+    cov = {c["component"]: c["status"] for c in lead.get("coverage", [])}
+    close = [c["id"] for c in lead.get("closest", []) if c.get("relation") in ("same idea", "very close")]
+    if core and close and all(cov.get(i) == "covered" for i in core):
+        at_least("amber", f"The literature review found every core component already covered; closest work: "
+                          f"{', '.join(close[:4])}. Novelty would rest on the combination or setting only.")
     n = len(papers)
     if n < 10 or lead.get("confidence") == "low":
         at_least("amber", f"Evidence is thin ({n} papers, review confidence {lead.get('confidence')}): "

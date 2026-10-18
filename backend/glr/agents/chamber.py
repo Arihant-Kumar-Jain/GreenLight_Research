@@ -195,7 +195,8 @@ async def hold(pid: str, motion: str, pack: dict, on_update=None) -> dict:
     with trace.scope(agent="Speaker"):
         ruling = await llm.chat_json("judge", SPEAKER, f"Motion: {motion}\n\nEvidence pack:\n{pack_txt}\n\n"
                                      f"Debate transcript:\n{_transcript(d)}", Ruling,
-                                     title="Speaker: adjudicate and rule", max_tokens=6000)
+                                     title="Speaker: adjudicate and rule", max_tokens=6000,
+                                     temperature=0.0)
         r = ruling.model_dump()
         trace.info(f"Speaker rules {r['light'].upper()}: {r['headline']}", r["deciding_factor"])
     d["ruling"] = r
