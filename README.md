@@ -25,6 +25,33 @@ Built for the NVIDIA × Nebius hackathon (Apps & Agentic AI) on open models only
 | **Tests** | `make test`: 35 offline tests (no keys or network) |
 | **Evidence** | Every design decision below cites the measurement behind it; charts in `docs/benchmarks/` |
 
+## Engineering highlights
+
+- **20+ cooperating agent roles, 19-25 agent instances per run**: Intake, Planner, Lead Researcher, up to 4 parallel
+  Scouts per round, Critic, Web Scout (Tavily), Relevance Ranker, Reader, Credibility Scorer, Auditor, Novelty Mapper +
+  strict judge, Proponent, Skeptic, 3 Speakers, Report Writer, Citation Checker, Graph Builder, Knowledge Graph, Research
+  Chat, Self-correction. Each runs its own loop and context; the trace links every child to its parent.
+- **Own agent harness, no framework** (`backend/glr/harness/`): typed tools generated from Python signatures, parallel
+  tool calls, sub-agent swarms, budgets in USD / calls / time that flow parent → child, loop detection, a reflection
+  gate, forced finish, and 3-tier context compression that never breaks a tool-call pair.
+- **4 models working as a team on Nebius Token Factory**: Nemotron Super for agents, Nano for high-volume checks, Ultra
+  only for the verdict, Qwen3-Embedding-8B for retrieval and memory; 160-220 model calls per run in 5.2-7.4 minutes.
+- **7 knowledge sources**: arXiv, OpenAlex (+ citation graph), Hugging Face Papers, Semantic Scholar, Tavily Search,
+  Tavily Extract, and each paper's own bibliography; 90-180 papers per run, merged into one deduplicated registry.
+- **6-stage retrieval**: multi-query + HyDE expansion (6 s deadline), BM25 + Qwen3 dense recall, reciprocal rank fusion,
+  cross-encoder reranking (NVIDIA NeMo Retriever / Qwen3-Reranker-8B on our Nebius GPU / local / Nemotron), a calibrated
+  evidence gate (**AUROC 1.0**), MMR diversity, neighbour context.
+- **Verified, not generated**: every novelty overlap, audit red flag and knowledge-graph entity must match text found in
+  the paper; every cited sentence in the report and chat is checked against the cited paper; credibility is a
+  deterministic formula; 6 code guardrails can only make the verdict more cautious.
+- **Memory**: 5-layer research chat memory (pinned state, long-term facts, token-budget folding, embedding recall,
+  in-turn compression) and a shared notebook every agent reads.
+- **Product**: 25 API endpoints, 39 typed (pydantic) model outputs, Google sign-in with private projects, daily spend
+  caps, PII redaction before any model call or search, an 11-tab workspace with 4 three.js scenes (paper galaxy, 3D
+  citation graph, debate chamber, landing), live agent graph, Markdown export, deployed on Nebius.
+- **Code**: about 5,000 lines of Python in 37 modules, 4,000 lines of TypeScript, 35 offline tests that run the whole
+  harness against a scripted model.
+
 ## Sponsor tech in the code
 
 | Sponsor | Where it is called (paths under `backend/glr/`) |
@@ -61,31 +88,32 @@ Plus arXiv, OpenAlex, Hugging Face Papers and Semantic Scholar for papers, citat
 
 ## How it works
 
-```
- Intake chat ──▶ testable brief: research question, method, claimed contributions      (Nemotron Super)
-      │          your text is redacted (emails, names, keys…) before any model call or search
-      ▼
- Planner ──▶ 2-5 idea components + search angles, always incl. 2 perspective angles
-      ▼
- Lead Researcher ──dispatch──▶ Scout ∥ Scout ∥ Scout ∥ Scout          (each its own agent loop and context)
-      │   ▲  compressed reports only        arXiv · OpenAlex · HF Papers · Tavily · citation graph · full texts
-      │   └── Critic: round 1 is never final → targeted round 2
-      ▼
- Web Scout (Tavily) ──▶ live web sweep for recent work the indexes miss
-      ▼
- Relevance ranking (cross-encoder) → full texts (Tavily Extract) → credibility score ∥ Auditor (red flags)
-      ▼
- Novelty matrix: idea components × closest papers, every overlap backed by a quote found in the paper,
-                 re-checked by a strict second judge
-      ▼
- Debate: Proponent ∥ Skeptic → Speaker panel: 3 × Nemotron Ultra, majority vote
-      ▼
- Guardrails in code (can only make the verdict more cautious) → green / amber / red
-      ▼
- Report with comparison table → citation check → relationship graph → knowledge graph → research chat
+```mermaid
+flowchart TD
+    U[Researcher] -->|idea, redacted| I[Intake chat<br/>Nemotron Super]
+    I --> P[Planner<br/>idea components + search angles]
+    P --> L[Lead Researcher<br/>Nemotron Super]
+    L -->|dispatch, in parallel| S1[Scout] & S2[Scout] & S3[Scout:<br/>same mechanism, other field] & S4[Scout:<br/>skeptical reviewer]
+    S1 & S2 & S3 & S4 -->|compressed reports| L
+    C[Critic · Nemotron Nano] -->|round 1 never final| L
+    L --> W[Web Scout · Tavily<br/>recent work]
+    W --> R[Relevance ranking<br/>cross-encoder]
+    R --> F[Full texts · Tavily Extract]
+    F --> CR[Credibility score<br/>deterministic] & AU[Auditor<br/>verified red flags]
+    CR & AU --> N[Novelty matrix<br/>quote-verified + strict judge]
+    N --> D[Debate: Proponent vs Skeptic]
+    D --> SP[Speaker panel<br/>3 × Nemotron Ultra, majority]
+    SP --> G{Guardrails in code}
+    G --> V[Green / Amber / Red]
+    V --> RE[Report + citation check] --> GR[Relationship graph + knowledge graph] --> CH[Research chat<br/>5-layer memory]
+    subgraph Sources
+      AX[arXiv] --- OA[OpenAlex] --- HF[HF Papers] --- TV[Tavily] --- CG[Citation graph]
+    end
+    S1 -.-> Sources
 ```
 
----
+Everything a user types is redacted (emails, names, keys…) before any model call or search. Every agent call is traced
+live in the UI with its parent agent, model and latency.
 
 ## Why it is built this way
 
