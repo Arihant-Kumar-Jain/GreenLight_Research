@@ -1,0 +1,34 @@
+# Production on a Nebius Compute VM (deploy/nebius.md): app + Caddy (automatic HTTPS for GLR_DOMAIN).
+# Local check without a domain: `docker compose up --build app` and open http://localhost:8100.
+services:
+  app:
+    image: ${GLR_IMAGE:-glr:latest}
+    build: .
+    env_file: .env
+    environment:
+      GLR_DB_PATH: /data/glr.db
+    volumes:
+      - glr_data:/data
+    ports:
+      - "127.0.0.1:8100:8100"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    profiles: ["prod"]
+    depends_on: [app]
+    environment:
+      GLR_DOMAIN: ${GLR_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
+volumes:
+  glr_data:
+  caddy_data:
+  caddy_config:

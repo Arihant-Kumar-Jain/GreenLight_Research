@@ -1,0 +1,5 @@
+# Let's Encrypt cert for the domain; HTTP redirects to HTTPS.
+{$GLR_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8100
+}

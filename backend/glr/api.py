@@ -1,14 +1,15 @@
 """GreenLight Research HTTP API (FastAPI). Run: uv run uvicorn glr.api:app --reload --port 8100"""
 
 import asyncio
+import datetime as dt
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import db, graph, llm, papers, pipeline, privacy, providers, web
+from . import auth, db, graph, llm, papers, pipeline, privacy, providers, web
 from .agents import chat, intake
 from .config import REPO_DIR, missing_keys, settings
 from .privacy import scrub_secrets
@@ -17,13 +18,34 @@ app = FastAPI(title="GreenLight Research API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins.split(","), allow_methods=["*"],
                    allow_headers=["*"])
 
+User = dict
+CurrentUser = Depends(auth.require_user)
+MaybeUser = Depends(auth.optional_user)
+
 _chat_tasks: dict[str, asyncio.Task] = {}
 _intake_tasks: dict[str, asyncio.Task] = {}
 
 
-def _project_or_404(pid: str) -> dict:
+# ---------------------------------------------------------------- spend caps
+
+def _daily_guard(run: bool = False) -> None:
+    """GLR_MAX_USD_PER_DAY / GLR_MAX_RUNS_PER_DAY (UTC days). A run in flight may finish past the USD cap."""
+    today = dt.datetime.now(dt.UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    if settings.max_usd_per_day and db.spend_since(today.timestamp()) >= settings.max_usd_per_day:
+        raise HTTPException(429, f"Today's budget (${settings.max_usd_per_day:.2f}) is used up. Try again tomorrow (UTC).")
+    if run and settings.max_runs_per_day:
+        key = f"runs:{today.date()}"
+        n = db.cache_get(key) or 0
+        if n >= settings.max_runs_per_day:
+            raise HTTPException(429, f"Today's limit of {settings.max_runs_per_day} research runs is reached. "
+                                     "Try again tomorrow (UTC).")
+        db.cache_put(key, n + 1)
+
+
+def _project_or_404(pid: str, user: User) -> dict:
+    """The project if this user owns it. Other users' projects look like 404s."""
     p = db.project(pid)
-    if not p:
+    if not p or not auth.owns(user, p):
         raise HTTPException(404, "No such project")
     return p
 
@@ -36,7 +58,7 @@ async def health():
            "tavily_key": bool(settings.tavily_api_key), "s2_key": bool(settings.s2_api_key),
            "openalex_polite": bool(settings.openalex_mailto),
            "budget_usd_per_run": settings.max_usd_per_run, "research_rounds": settings.max_research_rounds,
-           "max_scouts": settings.max_scouts}
+           "max_scouts": settings.max_scouts, "auth": auth.mode()}
     if settings.tavily_api_key:
         out["tavily_credits"] = await web.usage()
     if providers.active():
@@ -45,6 +67,28 @@ async def health():
         except Exception as e:
             out["models_error"] = scrub_secrets(str(e))
     return out
+
+
+# ---------------------------------------------------------------- auth
+
+class GoogleLogin(BaseModel):
+    credential: str
+
+
+@app.get("/api/auth/me")
+async def auth_me(user: User | None = MaybeUser):
+    return auth.public_config(user)
+
+
+@app.post("/api/auth/google")
+async def auth_google(body: GoogleLogin, response: Response):
+    return auth.public_config(await auth.login_with_google(body.credential, response))
+
+
+@app.post("/api/auth/logout")
+async def auth_logout(request: Request, response: Response):
+    auth.logout(request, response)
+    return {"ok": True}
 
 
 @app.post("/api/redact")
@@ -59,8 +103,8 @@ class Text(BaseModel):
     text: str
 
 
-def _intake_view(pid: str) -> dict:
-    p = _project_or_404(pid)
+def _intake_view(pid: str, user: User) -> dict:
+    p = _project_or_404(pid, user)
     return {"project": _summary(p), "messages": db.messages(pid, "intake"),
             "busy": pid in _intake_tasks and not _intake_tasks[pid].done()}
 
@@ -81,55 +125,60 @@ async def _intake_turn(pid: str) -> None:
 
 
 @app.get("/api/projects")
-async def list_projects():
-    return db.projects()
+async def list_projects(user: User | None = MaybeUser):
+    return db.projects(user["id"]) if user else []
 
 
 @app.post("/api/projects")
-async def new_project(body: Text):
+async def new_project(body: Text, user: User = CurrentUser):
     if missing := missing_keys():
         raise HTTPException(400, f"Add {', '.join(missing)} to GreenLight_Research/.env")
     r = privacy.redact(body.text.strip())
     if len(r.text) < 10:
         raise HTTPException(400, "Describe the idea in a sentence or two")
-    pid = db.create_project(r.text, redactions=r.summary())
+    _daily_guard()
+    pid = db.create_project(r.text, redactions=r.summary(), user_id=user["id"])
     db.add_message(pid, "intake", "user", r.text, {"redactions": r.summary()} if r.count else None)
     _intake_tasks[pid] = asyncio.create_task(_intake_turn(pid))
-    return _intake_view(pid)
+    return _intake_view(pid, user)
 
 
 @app.get("/api/projects/{pid}/intake")
-async def get_intake(pid: str):
-    return _intake_view(pid)
+async def get_intake(pid: str, user: User = CurrentUser):
+    return _intake_view(pid, user)
 
 
 @app.post("/api/projects/{pid}/intake")
-async def intake_message(pid: str, body: Text):
-    _project_or_404(pid)
+async def intake_message(pid: str, body: Text, user: User = CurrentUser):
+    _project_or_404(pid, user)
     if pid in _intake_tasks and not _intake_tasks[pid].done():
         raise HTTPException(409, "Still answering the previous message")
+    _daily_guard()
     r = privacy.redact(body.text.strip())
     db.add_message(pid, "intake", "user", r.text, {"redactions": r.summary()} if r.count else None)
     _intake_tasks[pid] = asyncio.create_task(_intake_turn(pid))
-    return _intake_view(pid)
+    return _intake_view(pid, user)
 
 
 @app.post("/api/projects/{pid}/start")
-async def start(pid: str):
-    p = _project_or_404(pid)
+async def start(pid: str, user: User = CurrentUser):
+    p = _project_or_404(pid, user)
     if not p.get("brief"):
         raise HTTPException(400, "The intake has not produced a brief yet")
     if missing := missing_keys():
         raise HTTPException(400, f"Add {', '.join(missing)} to GreenLight_Research/.env")
-    pipeline.start(pid)
+    if not pipeline.is_running(pid):
+        _daily_guard(run=True)
+        pipeline.start(pid)
     return _summary(db.project(pid))
 
 
 @app.post("/api/projects/{pid}/rerun")
-async def rerun(pid: str):
-    _project_or_404(pid)
+async def rerun(pid: str, user: User = CurrentUser):
+    _project_or_404(pid, user)
     if pipeline.is_running(pid):
         raise HTTPException(409, "Already running")
+    _daily_guard(run=True)
     for t in ("papers", "chunks", "notes", "trace"):
         db.x(f"DELETE FROM {t} WHERE project_id=?", (pid,))
     db.update_project(pid, plan=None, novelty=None, debate=None, verdict=None, report=None, stats=None)
@@ -138,8 +187,8 @@ async def rerun(pid: str):
 
 
 @app.delete("/api/projects/{pid}")
-async def delete(pid: str):
-    _project_or_404(pid)
+async def delete(pid: str, user: User = CurrentUser):
+    _project_or_404(pid, user)
     if pipeline.is_running(pid):
         raise HTTPException(409, "Stop is not supported while running; wait for it to finish")
     db.delete_project(pid)
@@ -160,16 +209,16 @@ def _paper_row(p: dict) -> dict:
 
 
 @app.get("/api/projects/{pid}")
-async def get_project(pid: str):
-    p = _project_or_404(pid)
+async def get_project(pid: str, user: User = CurrentUser):
+    p = _project_or_404(pid, user)
     return {**p, "chat_memory": None, "running": pipeline.is_running(pid),
             "papers": [_paper_row(x) for x in db.papers(pid)], "notes": db.notes(pid),
             "totals": db.trace_totals(pid)}
 
 
 @app.get("/api/projects/{pid}/papers/{paper_id}")
-async def get_paper(pid: str, paper_id: str):
-    _project_or_404(pid)
+async def get_paper(pid: str, paper_id: str, user: User = CurrentUser):
+    _project_or_404(pid, user)
     p = db.paper(pid, paper_id)
     if not p:
         raise HTTPException(404, "No such paper")
@@ -177,17 +226,18 @@ async def get_paper(pid: str, paper_id: str):
 
 
 @app.post("/api/projects/{pid}/papers/{paper_id}/score")
-async def score_paper(pid: str, paper_id: str):
-    _project_or_404(pid)
+async def score_paper(pid: str, paper_id: str, user: User = CurrentUser):
+    _project_or_404(pid, user)
     if not db.paper(pid, paper_id):
         raise HTTPException(404, "No such paper")
+    _daily_guard()
     await papers.enrich(pid, [paper_id.upper()])
     return _paper_row(db.paper(pid, paper_id))
 
 
 @app.get("/api/projects/{pid}/trace")
-async def get_trace(pid: str, after: int = 0):
-    _project_or_404(pid)
+async def get_trace(pid: str, after: int = 0, user: User = CurrentUser):
+    _project_or_404(pid, user)
     return {"events": db.trace(pid, after), "totals": db.trace_totals(pid)}
 
 
@@ -197,8 +247,8 @@ _graph_locks: dict[str, asyncio.Lock] = {}
 
 
 @app.get("/api/projects/{pid}/graph")
-async def get_graph(pid: str, refresh: bool = False):
-    _project_or_404(pid)
+async def get_graph(pid: str, refresh: bool = False, user: User = CurrentUser):
+    _project_or_404(pid, user)
     key = f"graph:{pid}:{len(db.papers(pid))}"
     async with _graph_locks.setdefault(pid, asyncio.Lock()):
         if not refresh and (hit := db.cache_get(key)) is not None:
@@ -215,26 +265,28 @@ class Pair(BaseModel):
 
 
 @app.post("/api/projects/{pid}/graph/explain")
-async def explain_pair(pid: str, body: Pair):
-    _project_or_404(pid)
+async def explain_pair(pid: str, body: Pair, user: User = CurrentUser):
+    _project_or_404(pid, user)
+    _daily_guard()
     return {"text": await graph.explain(pid, body.a.upper(), body.b.upper(), body.facts[:600])}
 
 
 # ---------------------------------------------------------------- research chat (to-and-fro)
 
 @app.get("/api/projects/{pid}/chat")
-async def get_chat(pid: str):
-    _project_or_404(pid)
+async def get_chat(pid: str, user: User = CurrentUser):
+    _project_or_404(pid, user)
     return {"messages": db.messages(pid, "chat"), "busy": pid in _chat_tasks and not _chat_tasks[pid].done()}
 
 
 @app.post("/api/projects/{pid}/chat")
-async def post_chat(pid: str, body: Text):
-    _project_or_404(pid)
+async def post_chat(pid: str, body: Text, user: User = CurrentUser):
+    _project_or_404(pid, user)
     if pid in _chat_tasks and not _chat_tasks[pid].done():
         raise HTTPException(409, "Still answering the previous message")
     if not body.text.strip():
         raise HTTPException(400, "Empty message")
+    _daily_guard()
 
     async def go():
         try:
@@ -244,7 +296,7 @@ async def post_chat(pid: str, body: Text):
                            {"error": True})
     _chat_tasks[pid] = asyncio.create_task(go())
     await asyncio.sleep(0.05)
-    return await get_chat(pid)
+    return await get_chat(pid, user)
 
 
 # ---------------------------------------------------------------- static UI (make serve)

@@ -90,9 +90,12 @@ NVIDIA reranker), no relevance cutoff for abstention, and no retrieval eval yet.
 cp .env.example .env      # OPENROUTER_API_KEY or NEBIUS_API_KEY, TAVILY_API_KEY (+ optional OPENALEX_API_KEY, S2_API_KEY)
 make setup                # uv sync + npm install
 make dev                  # API :8100 + UI :5180
-make test                 # 15 offline tests (scripted model: harness, compression, budgets, scoring, guardrails)
+make test                 # offline tests (scripted model: harness, compression, budgets, scoring, guardrails, auth)
 make check                # tsc + vite build + oxlint + import check + tests
 ```
+
+Sign-in: set `GOOGLE_CLIENT_ID` for Google sign-in (projects are private per user); without it, localhost runs as a
+built-in local user. **Deploy**: one container (`Dockerfile`) + Caddy on a Nebius VM, see [`deploy/nebius.md`](deploy/nebius.md).
 
 UI: landing (three.js idea-in-a-galaxy hero) → intake chat with quick replies and a live brief → workspace tabs:
 **Verdict** · **Agents (live)** (agent graph + trace) · **Paper galaxy** (3D, orbit = closeness, colour = credibility)

@@ -2,6 +2,7 @@ import { ArrowUp, Rocket, ShieldCheck } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { go } from './App'
 import { api, type Brief, type IntakeView } from './api'
+import { UserMenu } from './auth'
 import { Logo } from './Home'
 import { Badge, Button, Card, cx, Markdown, Typing } from './ui'
 
@@ -73,7 +74,10 @@ export default function Intake({ id }: { id: string }) {
     <div className="flex h-screen flex-col">
       <nav className="flex items-center justify-between border-b border-line px-6 py-3">
         <Logo />
-        <span className="eyebrow">Intake · sharpen the idea</span>
+        <div className="flex items-center gap-3">
+          <span className="eyebrow">Intake · sharpen the idea</span>
+          <UserMenu />
+        </div>
       </nav>
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_380px]">
         <div className="flex min-h-0 flex-col">

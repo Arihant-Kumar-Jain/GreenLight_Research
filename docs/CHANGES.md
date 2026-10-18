@@ -5,6 +5,43 @@ For each change: what, why, new env vars, how to test, open TODOs.
 
 ---
 
+## 2026-10-18 (evening) — Sachit (with Claude): Google sign-in, spend caps, Nebius deploy files
+
+**What.**
+- **Sign in with Google** (`backend/glr/auth.py`, `web/src/auth.tsx`), ported from GreenLight. Google Identity Services
+  gives the browser an ID token. The backend verifies it against `GOOGLE_CLIENT_ID` (no client secret) and sets an
+  HttpOnly `glr_session` cookie. Only the token's SHA-256 is stored (`sessions` table). Modes: `google` (client ID set),
+  `dev` (no client ID on localhost → built-in `local` user, loopback requests only), `off` (no client ID on a public
+  host → sign-in refused).
+- **Projects are private to their owner.** New `projects.user_id`. Older databases are migrated with every project
+  given to `local`. Every `/api/projects/{id}/…` route needs the owner. Other users get 404.
+- **Daily spend caps** for a public deploy: `GLR_MAX_USD_PER_DAY` (LLM spend across all users, from the trace) and
+  `GLR_MAX_RUNS_PER_DAY`. They answer 429. `GLR_MAX_USD_PER_RUN` only capped one run.
+- **Deploy**: `Dockerfile` (multi-stage, one uvicorn worker, non-root, DB at `/data`), `docker-compose.yml` (app,
+  plus Caddy with automatic HTTPS under `--profile prod`), `deploy/Caddyfile`, `deploy/backup.sh` (SQLite online backup
+  to Nebius Object Storage), `deploy/nebius.md` (Token Factory + Compute VM + Container Registry + Object Storage).
+  Why a VM and not a Serverless AI endpoint: in-process asyncio runs and SQLite need one long-lived process on a real
+  disk. An endpoint's disk is wiped on stop, and its managed URL can't take a custom domain.
+
+- **Invite-only option**: `GLR_ALLOWED_EMAILS` (emails or `@domain`). Empty = any verified Google account.
+- **Heads-up, existing local projects**: the migration gives them to the `local` user, and nobody is `local` once
+  `GOOGLE_CLIENT_ID` is set. To keep them, sign in once with Google, then run:
+  `sqlite3 backend/data/glr.db "UPDATE projects SET user_id=(SELECT id FROM users WHERE email='you@gmail.com') WHERE user_id='local'"`
+
+**Env vars**: `GOOGLE_CLIENT_ID`, `GLR_ALLOWED_EMAILS`, `GLR_AUTH` (`dev` forces the local user), `GLR_MAX_USD_PER_DAY`,
+`GLR_MAX_RUNS_PER_DAY`, `GLR_DOMAIN` (Caddy), `GLR_IMAGE` (compose). New dependency: `google-auth`.
+
+**Test.** `make test` (24, incl. sessions, ownership 404s, logout, allowlist, dev mode only from loopback, both caps).
+Local: without `GOOGLE_CLIENT_ID` the nav shows "Local dev". With it, add `http://localhost` and
+`http://localhost:5180` to the OAuth client's JavaScript origins, then sign in from the nav.
+Container (checked: UI, API, DB on the volume, non-root): `docker compose up --build app` → http://localhost:8100. Inside
+Docker requests are not loopback, so the dev user is off. Set `GOOGLE_CLIENT_ID` to sign in.
+
+**TODO.** The Token Factory catalog (Ultra + Qwen3 embeddings) is not yet verified with a Nebius key. Sharing a
+project read-only (for judges) isn't possible yet.
+
+---
+
 ## 2026-10-18 (later) — Arihant (with Claude): paper relationship graph
 
 **What.** New workspace tab **Relationship graph** (`backend/glr/graph.py`, `web/src/three/PaperGraph.tsx`,

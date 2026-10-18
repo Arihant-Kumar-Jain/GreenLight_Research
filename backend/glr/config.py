@@ -68,6 +68,15 @@ class Settings:
     public_base_url: str = field(default_factory=lambda: _env("GLR_PUBLIC_BASE_URL", "http://localhost:8100").rstrip("/"))
     cors_origins: str = field(default_factory=lambda: _env("GLR_CORS_ORIGINS", "*"))
 
+    # ---- Sign in with Google (auth.py): OAuth "Web application" client ID only, no secret. Empty = local dev user.
+    google_client_id: str = field(default_factory=lambda: _env("GOOGLE_CLIENT_ID"))
+    auth_mode: str = field(default_factory=lambda: _env("GLR_AUTH"))  # "dev" forces the local user (never on a public host)
+    allowed_emails: str = field(default_factory=lambda: _env("GLR_ALLOWED_EMAILS"))  # comma list; empty = any Google account
+
+    # ---- Public deploy spend caps, UTC days (0 = off)
+    max_usd_per_day: float = field(default_factory=lambda: _float("GLR_MAX_USD_PER_DAY", 0))
+    max_runs_per_day: int = field(default_factory=lambda: _int("GLR_MAX_RUNS_PER_DAY", 0))
+
 
 settings = Settings()
 

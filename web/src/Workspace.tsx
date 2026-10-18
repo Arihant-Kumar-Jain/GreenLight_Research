@@ -1,6 +1,7 @@
 import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Share2, Sparkles } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Project, type TraceEvent } from './api'
+import { GoogleButton, useAuth, UserMenu } from './auth'
 import { Logo } from './Home'
 import TrafficLight from './TrafficLight'
 import { Badge, Button, Card, cx, LIGHT, Markdown, PaperCtx, SectionTitle } from './ui'
@@ -164,6 +165,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
   const [drawer, setDrawer] = useState<string | null>(null)
   const [chatBusy, setChatBusy] = useState(false)
   const cursor = useRef(0)
+  const { needsSignIn } = useAuth()
 
   const load = useCallback(async () => {
     try {
@@ -189,6 +191,13 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
   const known = useMemo(() => new Set(p?.papers.map((x) => x.id) ?? []), [p?.papers])
   const ctx = useMemo(() => ({ open: setDrawer, known }), [known])
 
+  if (err && !p && needsSignIn) {
+    return (
+      <div className="grid h-screen place-items-center">
+        <div className="flex flex-col items-center gap-3 text-muted">Sign in to open this project.<GoogleButton /></div>
+      </div>
+    )
+  }
   if (err && !p) return <div className="p-10 text-stop">{err}</div>
   if (!p) return <div className="grid h-screen place-items-center text-muted"><Loader2 className="animate-spin" /></div>
   const v = p.verdict
@@ -202,6 +211,7 @@ export default function Workspace({ id, tab }: { id: string; tab: string }) {
           <div className="flex items-center gap-2">
             {p.running && <Badge tone="info"><Activity size={11} className="animate-glow" /> agents working</Badge>}
             {!p.running && p.status !== 'draft' && <Button variant="ghost" onClick={async () => { await api.rerun(id); cursor.current = 0; setEvents([]); load() }}><RotateCcw size={14} /> Re-run</Button>}
+            <UserMenu />
           </div>
         </nav>
         <header className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-8 px-6 pt-8">

@@ -2,6 +2,7 @@ import { ArrowUp, BookOpenCheck, Bot, FlaskConical, GitBranch, Scale, ShieldChec
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { go } from './App'
 import { api, type Health, type ProjectSummary } from './api'
+import { GoogleButton, useAuth, UserMenu } from './auth'
 import { Badge, Card, cx, LIGHT, timeAgo } from './ui'
 
 const Constellation = lazy(() => import('./three/Constellation'))
@@ -30,14 +31,18 @@ export default function Home() {
   const [err, setErr] = useState('')
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [health, setHealth] = useState<Health | null>(null)
+  const { user, needsSignIn } = useAuth()
+  const [askSignIn, setAskSignIn] = useState(false)
 
+  useEffect(() => { api.health().then(setHealth).catch(() => {}) }, [])
   useEffect(() => {
     api.projects().then(setProjects).catch(() => {})
-    api.health().then(setHealth).catch(() => {})
-  }, [])
+    if (user) setAskSignIn(false)
+  }, [user])
 
   async function submit() {
     if (text.trim().length < 10 || busy) return
+    if (needsSignIn) return setAskSignIn(true)
     setBusy(true)
     setErr('')
     try {
@@ -68,6 +73,7 @@ export default function Home() {
           {health && (health.missing_keys.length
             ? <Badge tone="stop">Missing: {health.missing_keys.join(', ')}</Badge>
             : <Badge tone="go">{health.llm_provider} · Tavily ready</Badge>)}
+          <UserMenu />
         </div>
       </nav>
 
@@ -98,6 +104,12 @@ export default function Home() {
             </div>
           </Card>
           {err && <p className="mt-3 text-sm text-stop">{err}</p>}
+          {askSignIn && needsSignIn && (
+            <div className="mt-4 flex flex-col items-center gap-2 text-sm text-muted">
+              Sign in to start research. Your ideas and results stay private to your account.
+              <GoogleButton />
+            </div>
+          )}
           {models && (
             <p className="mt-4 text-xs text-muted">
               Models: {['fast', 'reason', 'judge', 'embed'].map((r) => modelName(r)).filter(Boolean).join(' · ')}
