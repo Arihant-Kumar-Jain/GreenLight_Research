@@ -2,6 +2,7 @@ import { ArrowUp, Rocket, ShieldCheck } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { go } from './App'
 import { api, type Brief, type IntakeView } from './api'
+import { UserMenu } from './auth'
 import { Logo } from './Home'
 import { Badge, Button, Card, cx, Markdown, Typing } from './ui'
 
@@ -73,7 +74,10 @@ export default function Intake({ id }: { id: string }) {
     <div className="flex h-screen flex-col">
       <nav className="flex items-center justify-between border-b border-line px-6 py-3">
         <Logo />
-        <span className="eyebrow">Intake · sharpen the idea</span>
+        <div className="flex items-center gap-3">
+          <span className="eyebrow">Intake · sharpen the idea</span>
+          <UserMenu />
+        </div>
       </nav>
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_380px]">
         <div className="flex min-h-0 flex-col">
@@ -118,7 +122,7 @@ export default function Intake({ id }: { id: string }) {
                 placeholder="Answer, add detail, or say “just start”…"
                 className="flex-1 resize-none rounded-xl border border-line bg-surface px-4 py-3 text-[15px] outline-none focus:border-go/50" />
               <button onClick={() => send(text)} disabled={!text.trim() || view?.busy}
-                className="grid h-11 w-11 place-items-center rounded-xl bg-go text-[#05210f] disabled:opacity-30"><ArrowUp size={18} /></button>
+                className="grid h-11 w-11 place-items-center rounded-xl bg-go text-on-go disabled:opacity-30"><ArrowUp size={18} /></button>
             </div>
             {err && <p className="mx-auto mt-2 max-w-3xl text-sm text-stop">{err}</p>}
           </div>
@@ -130,7 +134,7 @@ export default function Intake({ id }: { id: string }) {
           </div>
           <Card className="p-4"><BriefCard brief={view?.project.brief} /></Card>
           <Button onClick={start} disabled={!view?.project.brief || starting || view?.busy}
-            className={cx('mt-4 w-full py-3', ready && 'shadow-[0_0_30px_-6px_var(--go)]')}>
+            className={cx('mt-4 w-full py-3', ready && 'ring-4 ring-go-soft')}>
             <Rocket size={16} /> {starting ? 'Launching agents…' : 'Start deep research'}
           </Button>
           {!ready && view?.project.brief && <p className="mt-2 text-center text-xs text-muted">You can start now; the agent will note its assumptions.</p>}

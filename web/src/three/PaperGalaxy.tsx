@@ -34,23 +34,23 @@ export default function PaperGalaxy({ papers, closest, light, onOpen, className 
   useEffect(() => {
     const el = mount.current
     if (!el) return
-    const st = createStage(el, { fov: 45, bloom: [0.85, 0.55, 0.1] })
+    const st = createStage(el, { fov: 45 })
     if (!st) return
     const { scene, camera, renderer, track, dpr } = st
     const world = new THREE.Group()
     scene.add(world)
-    scene.add(new THREE.AmbientLight(0xffffff, 0.35))
+    scene.add(new THREE.AmbientLight(0xffffff, 1.4))
     const key1 = new THREE.PointLight(0xffffff, 40, 40)
     key1.position.set(3, 6, 5)
     scene.add(key1)
 
     const rel = new Map(closest.map((c) => [c.id, c.relation]))
-    const tint = light === 'red' ? 0xff5d5d : light === 'amber' ? 0xf5b841 : 0x3ee07f
+    const tint = light === 'red' ? 0xb42318 : light === 'amber' ? 0xa85f00 : 0x0b7a47
 
     // ---------------------------------------------------------------- orbit guides
     for (const r of [...Object.values(ORBIT), UNRANKED]) {
       const ring = new THREE.Mesh(track(new THREE.TorusGeometry(r, 0.005, 6, 256)),
-        track(new THREE.MeshBasicMaterial({ color: 0x8b9a92, transparent: true, opacity: r === UNRANKED ? 0.06 : 0.14 })))
+        track(new THREE.MeshBasicMaterial({ color: 0x0e2a21, transparent: true, opacity: r === UNRANKED ? 0.07 : 0.16 })))
       ring.rotation.x = Math.PI / 2
       world.add(ring)
     }
@@ -70,13 +70,13 @@ export default function PaperGalaxy({ papers, closest, light, onOpen, className 
       const y = Math.sin(i * 78.233) * (r0 === UNRANKED ? 0.9 : 0.35)
       const col = credColor(p)
       const base = 0.07 + Math.min(0.2, Math.log10(1 + (p.citations ?? 0)) * 0.045) + (rel.has(p.id) ? 0.05 : 0)
-      const mat = track(new THREE.MeshStandardMaterial({ color: 0x0b1410, emissive: col, emissiveIntensity: rel.has(p.id) ? 2.4 : 1.3, roughness: 0.35, metalness: 0.1 }))
+      const mat = track(new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: rel.has(p.id) ? 0.45 : 0.2, roughness: 0.5, metalness: 0 }))
       const mesh = new THREE.Mesh(sphere, mat)
       mesh.scale.setScalar(base)
       mesh.userData.id = p.id
       world.add(mesh)
       if (p.retracted) {
-        const halo = new THREE.Mesh(track(new THREE.TorusGeometry(1.8, 0.12, 8, 48)), track(new THREE.MeshBasicMaterial({ color: 0xff5d5d })))
+        const halo = new THREE.Mesh(track(new THREE.TorusGeometry(1.8, 0.12, 8, 48)), track(new THREE.MeshBasicMaterial({ color: 0xb42318 })))
         mesh.add(halo)
       }
       bodies.push({ mesh, id: p.id, base, phase: Math.random() * 6.28, r, ang, y, speed: 0.04 / Math.sqrt(r) })
@@ -85,7 +85,7 @@ export default function PaperGalaxy({ papers, closest, light, onOpen, className 
     const threadGeo = track(new THREE.BufferGeometry())
     const threadPos = new Float32Array(threads.length * 6)
     threadGeo.setAttribute('position', new THREE.BufferAttribute(threadPos, 3))
-    const threadMat = track(new THREE.LineBasicMaterial({ color: tint, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }))
+    const threadMat = track(new THREE.LineBasicMaterial({ color: tint, transparent: true, opacity: 0.4, depthWrite: false }))
     world.add(new THREE.LineSegments(threadGeo, threadMat))
 
     // ---------------------------------------------------------------- the idea core
@@ -93,7 +93,7 @@ export default function PaperGalaxy({ papers, closest, light, onOpen, className 
     track(glass.geometry); track(glass.material)
     glass.mesh.scale.setScalar(0.95)
     scene.add(glass.mesh)
-    const core = new THREE.Mesh(track(new THREE.SphereGeometry(0.22, 24, 24)), track(new THREE.MeshBasicMaterial({ color: new THREE.Color(tint).lerp(new THREE.Color(0xffffff), 0.55) })))
+    const core = new THREE.Mesh(track(new THREE.SphereGeometry(0.22, 24, 24)), track(new THREE.MeshBasicMaterial({ color: tint })))
     scene.add(core)
     const rt = track(createRefractionTarget())
 
@@ -102,8 +102,8 @@ export default function PaperGalaxy({ papers, closest, light, onOpen, className 
     const s = pointCloud(S)
     for (let i = 0; i < S; i++) {
       const v = new THREE.Vector3().randomDirection().multiplyScalar(20 + Math.random() * 30)
-      s.pos.set([v.x, v.y, v.z], i * 3); s.col.set([0.7, 0.85, 0.78], i * 3)
-      s.alpha[i] = 0.1 + Math.random() * 0.3; s.size[i] = 0.06 + Math.random() * 0.1; s.rand[i] = Math.random()
+      s.pos.set([v.x, v.y, v.z], i * 3); s.col.set([0.055, 0.165, 0.129], i * 3)
+      s.alpha[i] = 0.06 + Math.random() * 0.16; s.size[i] = 0.06 + Math.random() * 0.1; s.rand[i] = Math.random()
     }
     track(s.geo)
     const sMat = track(pointsMaterial(dpr, 1))

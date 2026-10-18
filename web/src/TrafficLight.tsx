@@ -27,9 +27,9 @@ export default function TrafficLight({ verdict, analyzing, size = 220 }: { verdi
       <svg viewBox="0 0 100 280" width={w} height={size} className="overflow-visible">
         <defs>
           <linearGradient id="tl-body" x1="0" x2="1">
-            <stop offset="0" stopColor="#141c18" />
-            <stop offset="0.5" stopColor="#0c120f" />
-            <stop offset="1" stopColor="#070b09" />
+            <stop offset="0" stopColor="#1d3d32" />
+            <stop offset="0.5" stopColor="#132c23" />
+            <stop offset="1" stopColor="#0b1f18" />
           </linearGradient>
           <filter id="tl-glow" x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur stdDeviation="9" />
@@ -48,7 +48,7 @@ export default function TrafficLight({ verdict, analyzing, size = 220 }: { verdi
         </defs>
 
         {/* pole stub and housing */}
-        <rect x="44" y="266" width="12" height="14" rx="2" fill="#0c120f" />
+        <rect x="44" y="266" width="12" height="14" rx="2" fill="#132c23" />
         <rect x="6" y="8" width="88" height="262" rx="22" fill="url(#tl-body)" stroke="rgba(237,243,238,.12)" />
         <rect x="11" y="13" width="78" height="252" rx="18" fill="none" stroke="rgba(255,255,255,.04)" />
 

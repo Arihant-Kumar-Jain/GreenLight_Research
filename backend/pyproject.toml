@@ -16,6 +16,8 @@ dependencies = [
     "lxml>=5.2",
     "json-repair>=0.64.0",
     "pypdf>=5.0",
+    "google-auth>=2.40",
+    "requests>=2.32",
 ]
 
 [project.optional-dependencies]

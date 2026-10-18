@@ -89,9 +89,12 @@ export type TraceEvent = {
 export type Health = {
   missing_keys: string[]; llm_provider: string; tavily_key: boolean; s2_key: boolean
   budget_usd_per_run: number; research_rounds: number; max_scouts: number
-  models?: Record<string, { id: string; name: string } | string>; models_error?: string
+  models?: Record<string, { id: string; name: string } | string>; models_error?: string; auth?: AuthInfo['mode']
   rerankers?: { chain: string[]; local_model: string | null }
 }
+
+export type User = { id: string; email: string; name: string | null; picture: string | null }
+export type AuthInfo = { mode: 'google' | 'dev' | 'off'; google_client_id: string | null; user: User | null }
 
 export type GraphNode = {
   id: string; title: string; year: number | null; citations: number | null; credibility: number | null
@@ -137,6 +140,9 @@ export type IntakeView = { project: ProjectSummary; messages: Message[]; busy: b
 
 export const api = {
   health: () => req<Health>('/api/health'),
+  me: () => req<AuthInfo>('/api/auth/me'),
+  googleLogin: (credential: string) => post<AuthInfo>('/api/auth/google', { credential }),
+  logout: () => post<{ ok: boolean }>('/api/auth/logout'),
   projects: () => req<ProjectSummary[]>('/api/projects'),
   newProject: (text: string) => post<IntakeView>('/api/projects', { text }),
   intake: (id: string) => req<IntakeView>(`/api/projects/${id}/intake`),

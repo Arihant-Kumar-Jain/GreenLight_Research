@@ -1,19 +1,16 @@
 /**
  * The Research Chamber, abstracted (ported from Greenlight): two curved tiers of particle "benches" (Proponent in green, Skeptic in red)
- * face each other across an aisle; the Speaker is a glowing orb at the far end. Arguments fly from the
+ * face each other across an aisle; the Speaker is an ink orb at the far end. Arguments fly from the
  * benches to the Speaker as comets. Some are struck mid-flight (no evidence) and fade to grey.
+ * Drawn for the light theme: ink on a white surface, no bloom.
  */
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 
-const GOV = new THREE.Color(0x3ee07f)
-const OPP = new THREE.Color(0xff5d5d)
-const STRUCK = new THREE.Color(0x56605b)
-const SPEAKER = new THREE.Color(0xe9fff1)
+const GOV = new THREE.Color(0x0b7a47)
+const OPP = new THREE.Color(0xb42318)
+const STRUCK = new THREE.Color(0xb3bfb9)
+const SPEAKER = new THREE.Color(0x0e2a21)
 
 const POINT_VERT = /* glsl */ `
   attribute vec3 color; attribute float alpha; attribute float size; attribute float rand;
@@ -30,14 +27,14 @@ const POINT_FRAG = /* glsl */ `
   varying vec3 vColor; varying float vAlpha;
   void main() {
     float d = length(gl_PointCoord - 0.5);
-    float a = smoothstep(0.5, 0.0, d);
-    gl_FragColor = vec4(vColor, a * a * vAlpha);
+    float a = smoothstep(0.5, 0.25, d);
+    gl_FragColor = vec4(vColor, a * vAlpha);
   }`
 
 function pointsMaterial(dpr: number, twinkle: number) {
   return new THREE.ShaderMaterial({
     vertexShader: POINT_VERT, fragmentShader: POINT_FRAG, transparent: true, depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     uniforms: { uTime: { value: 0 }, uPixelRatio: { value: dpr }, uTwinkle: { value: twinkle } },
   })
 }
@@ -52,15 +49,14 @@ export default function ChamberScene({ className }: { className?: string }) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     let renderer: THREE.WebGLRenderer
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
     } catch {
       setFailed(true)
       return
     }
     const dpr = Math.min(window.devicePixelRatio, 1.75)
     renderer.setPixelRatio(dpr)
-    renderer.setClearColor(0x000000, 0)
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.setClearColor(0xffffff, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     Object.assign(renderer.domElement.style, { display: 'block', width: '100%', height: '100%' })
     el.appendChild(renderer.domElement)
@@ -105,7 +101,7 @@ export default function ChamberScene({ className }: { className?: string }) {
       for (let gz = -30; gz <= 18; gz++) {
         if (Math.random() > 0.55) continue
         benchPts.push(gx * 0.42, -0.02, gz * 0.42 - 2)
-        const c = new THREE.Color(0x2a3b33)
+        const c = new THREE.Color(0xb3bfb9)
         benchCol.push(c.r, c.g, c.b)
         benchAlpha.push(0.25 + Math.random() * 0.2)
         benchSize.push(0.035)
@@ -123,11 +119,11 @@ export default function ChamberScene({ className }: { className?: string }) {
 
     // ---------------------------------------------------------------- the Speaker
     const speakerPos = new THREE.Vector3(0, 1.35, -6.5)
-    const orbMat = track(new THREE.MeshStandardMaterial({ color: 0x0b1410, emissive: SPEAKER.clone(), emissiveIntensity: 2.2, roughness: 0.3 }))
+    const orbMat = track(new THREE.MeshStandardMaterial({ color: SPEAKER.clone(), emissive: SPEAKER.clone(), emissiveIntensity: 0.4, roughness: 0.35 }))
     const orb = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.42, 5)), orbMat)
     orb.position.copy(speakerPos)
     scene.add(orb)
-    const haloMat = track(new THREE.MeshBasicMaterial({ color: 0x9dffc4, transparent: true, opacity: 0.35 }))
+    const haloMat = track(new THREE.MeshBasicMaterial({ color: 0x0b7a47, transparent: true, opacity: 0.4 }))
     const halo = new THREE.Mesh(track(new THREE.TorusGeometry(0.85, 0.012, 8, 120)), haloMat)
     halo.position.copy(speakerPos)
     scene.add(halo)
@@ -137,16 +133,19 @@ export default function ChamberScene({ className }: { className?: string }) {
     scene.add(halo2)
     // Beam of light from above onto the Speaker (echoes the hero shot).
     const beamMat = track(new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-      uniforms: { uColor: { value: new THREE.Color(0x3ee07f) } },
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { uColor: { value: new THREE.Color(0x0b7a47) } },
       vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `uniform vec3 uColor; varying vec2 vUv; void main(){ float e = sin(vUv.x*3.14159);
-        gl_FragColor = vec4(uColor, e * pow(1.0 - vUv.y, 0.8) * 0.12); }`,
+        gl_FragColor = vec4(uColor, e * pow(1.0 - vUv.y, 0.8) * 0.07); }`,
     }))
     const beam = new THREE.Mesh(track(new THREE.CylinderGeometry(0.5, 1.6, 7, 48, 1, true)), beamMat)
     beam.position.set(speakerPos.x, speakerPos.y + 2.4, speakerPos.z)
     scene.add(beam)
-    scene.add(new THREE.AmbientLight(0xffffff, 0.2))
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2))
+    const sun = new THREE.DirectionalLight(0xffffff, 1.4)
+    sun.position.set(2, 6, 4)
+    scene.add(sun)
 
     // ---------------------------------------------------------------- arguments (comets)
     const COMETS = reduced ? 0 : 22
@@ -189,19 +188,12 @@ export default function ChamberScene({ className }: { className?: string }) {
       c.t = i / COMETS // stagger
     })
 
-    // ---------------------------------------------------------------- post + sizing
-    const composer = new EffectComposer(renderer)
-    composer.addPass(new RenderPass(scene, camera))
-    const bloom = new UnrealBloomPass(new THREE.Vector2(800, 600), 1.05, 0.55, 0.05)
-    composer.addPass(bloom)
-    composer.addPass(new OutputPass())
+    // ---------------------------------------------------------------- sizing
     const resize = () => {
       const w = el.clientWidth
       const h = el.clientHeight
       if (!w || !h) return
       renderer.setSize(w, h, false)
-      composer.setSize(w, h)
-      bloom.setSize(w, h)
       camera.aspect = w / h
       camera.updateProjectionMatrix()
     }
@@ -251,7 +243,7 @@ export default function ChamberScene({ className }: { className?: string }) {
           const idx = ci * TRAIL + k
           cPos.set([p.x, p.y, p.z], idx * 3)
           const fade = struck ? Math.max(0, 1 - (c.t - c.struckAt) / 0.35) : 1
-          col.copy(struck ? STRUCK : base).lerp(SPEAKER, k === 0 && !struck ? 0.5 : 0)
+          col.copy(struck ? STRUCK : base)
           cCol.set([col.r, col.g, col.b], idx * 3)
           cAlpha[idx] = (1 - k / TRAIL) * fade * (tt > 0 ? 1 : 0)
           cSize[idx] = (k === 0 ? 0.22 : 0.13) * (1 - k / (TRAIL * 1.3))
@@ -266,7 +258,7 @@ export default function ChamberScene({ className }: { className?: string }) {
 
       flash *= Math.pow(0.04, dt)
       orbMat.emissive.copy(SPEAKER).lerp(flashColor, flash * 0.8)
-      orbMat.emissiveIntensity = 2.2 + flash * 2.5 + Math.sin(t * 2) * 0.15
+      orbMat.emissiveIntensity = 0.4 + flash * 0.6
       orb.rotation.y += dt * 0.3
       halo.rotation.z += dt * 0.4
       halo2.rotation.z -= dt * 0.25
@@ -277,7 +269,7 @@ export default function ChamberScene({ className }: { className?: string }) {
       mouse.sy += (mouse.y - mouse.sy) * 0.03
       camera.position.set(Math.sin(t * 0.06) * 1.2 + mouse.sx * 1.2, 3.4 - mouse.sy * 0.5, 8.5)
       camera.lookAt(0, 0.9, -3.2)
-      composer.render()
+      renderer.render(scene, camera)
     }
     frame()
 
@@ -287,7 +279,6 @@ export default function ChamberScene({ className }: { className?: string }) {
       io.disconnect()
       window.removeEventListener('pointermove', onMove)
       disposables.forEach((d) => d.dispose())
-      composer.dispose()
       renderer.dispose()
       renderer.domElement.remove()
     }

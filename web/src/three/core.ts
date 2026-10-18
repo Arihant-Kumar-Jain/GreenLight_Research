@@ -1,6 +1,7 @@
 /**
- * Shared WebGL plumbing for the scenes: renderer + bloom/lens post chain, DPR cap, resize, off-screen pause,
- * reduced-motion flag and one-call disposal. Scenes only build objects and an `update(t, dt)` function.
+ * Shared WebGL plumbing for the scenes: renderer (opaque, on the light surface colour), optional bloom/lens post chain,
+ * DPR cap, resize, off-screen pause, reduced-motion flag and one-call disposal. Scenes only build objects and an
+ * `update(t, dt)` function.
  */
 import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
@@ -10,11 +11,14 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { LensShader } from './glass'
 
-export const GO = new THREE.Color(0x3ee07f)
-export const WAIT = new THREE.Color(0xf5b841)
-export const STOP = new THREE.Color(0xff5d5d)
-export const INFO = new THREE.Color(0x8ea6ff)
-export const MUTED = new THREE.Color(0x56605b)
+// Light theme (index.css): ink on paper, colour carries meaning.
+export const SURFACE = 0xffffff
+export const INK = new THREE.Color(0x0e2a21)
+export const GO = new THREE.Color(0x0b7a47)
+export const WAIT = new THREE.Color(0xa85f00)
+export const STOP = new THREE.Color(0xb42318)
+export const INFO = new THREE.Color(0x155e75)
+export const MUTED = new THREE.Color(0x9aa8a1)
 
 const POINT_VERT = /* glsl */ `
   attribute vec3 color; attribute float alpha; attribute float size; attribute float rand;
@@ -32,13 +36,13 @@ const POINT_FRAG = /* glsl */ `
   void main() {
     float d = length(gl_PointCoord - 0.5);
     float a = smoothstep(0.5, 0.0, d);
-    gl_FragColor = vec4(vColor, a * a * vAlpha);
+    gl_FragColor = vec4(vColor, smoothstep(0.0, 0.6, a) * vAlpha);
   }`
 
 export function pointsMaterial(dpr: number, twinkle: number) {
   return new THREE.ShaderMaterial({
     vertexShader: POINT_VERT, fragmentShader: POINT_FRAG, transparent: true, depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.NormalBlending,
     uniforms: { uTime: { value: 0 }, uPixelRatio: { value: dpr }, uTwinkle: { value: twinkle } },
   })
 }
@@ -66,15 +70,14 @@ export type Stage = {
 export function createStage(el: HTMLElement, opts: { fov?: number; bloom?: [number, number, number]; lens?: boolean } = {}): Stage | null {
   let renderer: THREE.WebGLRenderer
   try {
-    renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
   } catch {
     return null
   }
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const dpr = Math.min(window.devicePixelRatio, 1.75)
   renderer.setPixelRatio(dpr)
-  renderer.setClearColor(0x000000, 0)
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.setClearColor(SURFACE, 1)
   renderer.outputColorSpace = THREE.SRGBColorSpace
   Object.assign(renderer.domElement.style, { display: 'block', width: '100%', height: '100%' })
   el.appendChild(renderer.domElement)
@@ -84,20 +87,24 @@ export function createStage(el: HTMLElement, opts: { fov?: number; bloom?: [numb
   const disposables: { dispose: () => void }[] = []
   const track = <T extends { dispose: () => void }>(o: T) => (disposables.push(o), o)
 
-  const composer = new EffectComposer(renderer)
-  composer.addPass(new RenderPass(scene, camera))
-  const [strength, radius, threshold] = opts.bloom ?? [0.9, 0.6, 0.08]
-  const bloom = new UnrealBloomPass(new THREE.Vector2(800, 600), strength, radius, threshold)
-  composer.addPass(bloom)
-  if (opts.lens !== false) composer.addPass(new ShaderPass(LensShader))
-  composer.addPass(new OutputPass())
+  // Post effects only when asked for: on a light surface, bloom washes colours out.
+  let composer: EffectComposer | null = null
+  let bloom: UnrealBloomPass | null = null
+  if (opts.bloom || opts.lens) {
+    composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    if (opts.bloom) composer.addPass((bloom = new UnrealBloomPass(new THREE.Vector2(800, 600), ...opts.bloom)))
+    if (opts.lens) composer.addPass(new ShaderPass(LensShader))
+    composer.addPass(new OutputPass())
+  }
+  const render = () => (composer ? composer.render() : renderer.render(scene, camera))
 
   const resize = () => {
     const w = el.clientWidth, h = el.clientHeight
     if (!w || !h) return
     renderer.setSize(w, h, false)
-    composer.setSize(w, h)
-    bloom.setSize(w, h)
+    composer?.setSize(w, h)
+    bloom?.setSize(w, h)
     camera.aspect = w / h
     camera.updateProjectionMatrix()
   }
@@ -120,7 +127,7 @@ export function createStage(el: HTMLElement, opts: { fov?: number; bloom?: [numb
         const dt = Math.min(timer.getDelta(), 0.05)
         update(timer.getElapsed(), reduced ? 0 : dt)
         beforeRender?.()
-        composer.render()
+        render()
       }
       frame()
     },
@@ -129,7 +136,7 @@ export function createStage(el: HTMLElement, opts: { fov?: number; bloom?: [numb
       ro.disconnect()
       io.disconnect()
       disposables.forEach((d) => d.dispose())
-      composer.dispose()
+      composer?.dispose()
       renderer.dispose()
       renderer.domElement.remove()
     },

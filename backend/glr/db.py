@@ -1,4 +1,4 @@
-"""Persistence (stdlib SQLite): research projects, papers, corpus chunks, blackboard notes, chat, trace, web cache.
+"""Persistence (stdlib SQLite): users, sessions, research projects, papers, corpus chunks, notes, chat, trace, web cache.
 
 One file at GLR_DB_PATH. JSON columns hold agent outputs. Vectors are stored as float16 BLOBs next to their chunk.
 """
@@ -18,8 +18,24 @@ _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    google_sub TEXT UNIQUE,                -- NULL for the built-in local user
+    email TEXT NOT NULL,
+    name TEXT,
+    picture TEXT,
+    created_at REAL NOT NULL,
+    last_login REAL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,           -- SHA-256 of the cookie value; the raw token is never stored
+    user_id TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
+    user_id TEXT,                          -- owner
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL,
     title TEXT,
@@ -82,6 +98,8 @@ CREATE INDEX IF NOT EXISTS trace_project ON trace(project_id, id);
 CREATE TABLE IF NOT EXISTS web_cache (key TEXT PRIMARY KEY, ts REAL NOT NULL, value TEXT NOT NULL);
 """
 
+LOCAL_USER_ID = "local"  # owner of projects made before sign-in existed, and the user in local dev mode
+
 JSON_COLS = ("brief", "plan", "novelty", "debate", "verdict", "report", "redactions", "stats")
 
 
@@ -94,6 +112,11 @@ def conn() -> sqlite3.Connection:
             _conn.row_factory = sqlite3.Row
             _conn.execute("PRAGMA journal_mode=WAL")
             _conn.executescript(SCHEMA)
+            if "user_id" not in {r[1] for r in _conn.execute("PRAGMA table_info(projects)")}:
+                # Pre-auth database: existing projects belong to the local user.
+                _conn.execute("ALTER TABLE projects ADD COLUMN user_id TEXT")
+                _conn.execute("UPDATE projects SET user_id=?", (LOCAL_USER_ID,))
+            _conn.execute("CREATE INDEX IF NOT EXISTS projects_user ON projects(user_id, updated_at)")
             # A restart kills running analyses; say so instead of showing a spinner forever.
             _conn.execute("UPDATE projects SET status='error', error='Interrupted by a server restart. Press Re-run.' "
                           "WHERE status IN ('queued','running')")
@@ -117,11 +140,13 @@ def _loads(v: str | None) -> Any:
 
 # ---------------------------------------------------------------- projects
 
-def create_project(idea_text: str, title: str | None = None, redactions: list | None = None) -> str:
+def create_project(idea_text: str, title: str | None = None, redactions: list | None = None,
+                   user_id: str | None = None) -> str:
     pid = uuid.uuid4().hex[:12]
     now = time.time()
-    x("INSERT INTO projects (id, created_at, updated_at, title, idea_text, status, stage, redactions) "
-      "VALUES (?,?,?,?,?,'draft','intake',?)", (pid, now, now, title, idea_text, json.dumps(redactions or [])))
+    x("INSERT INTO projects (id, user_id, created_at, updated_at, title, idea_text, status, stage, redactions) "
+      "VALUES (?,?,?,?,?,?,'draft','intake',?)",
+      (pid, user_id, now, now, title, idea_text, json.dumps(redactions or [])))
     return pid
 
 
@@ -135,9 +160,9 @@ def project(pid: str) -> dict | None:
     return d
 
 
-def projects() -> list[dict]:
+def projects(user_id: str) -> list[dict]:
     rows = q("SELECT id, title, idea_text, status, stage, verdict, created_at, updated_at FROM projects "
-             "ORDER BY updated_at DESC")
+             "WHERE user_id=? ORDER BY updated_at DESC", (user_id,))
     out = []
     for r in rows:
         d = dict(r)
@@ -162,6 +187,51 @@ def delete_project(pid: str) -> None:
     for t in ("papers", "chunks", "notes", "messages", "trace"):
         x(f"DELETE FROM {t} WHERE project_id=?", (pid,))
     x("DELETE FROM projects WHERE id=?", (pid,))
+
+
+# ---------------------------------------------------------------- users + sessions
+
+_USER_COLS = "u.id, u.email, u.name, u.picture, u.created_at, u.last_login"
+
+
+def _user(uid: str) -> dict | None:
+    rows = q(f"SELECT {_USER_COLS} FROM users u WHERE u.id=?", (uid,))
+    return dict(rows[0]) if rows else None
+
+
+def upsert_google_user(sub: str, email: str, name: str | None, picture: str | None) -> dict:
+    now = time.time()
+    if rows := q("SELECT id FROM users WHERE google_sub=?", (sub,)):
+        x("UPDATE users SET email=?, name=?, picture=?, last_login=? WHERE id=?",
+          (email, name, picture, now, rows[0]["id"]))
+        return _user(rows[0]["id"])
+    uid = uuid.uuid4().hex[:12]
+    x("INSERT INTO users (id, google_sub, email, name, picture, created_at, last_login) VALUES (?,?,?,?,?,?,?)",
+      (uid, sub, email, name, picture, now, now))
+    return _user(uid)
+
+
+def ensure_local_user() -> dict:
+    x("INSERT OR IGNORE INTO users (id, email, name, created_at) VALUES (?,?,?,?)",
+      (LOCAL_USER_ID, "local@greenlight.dev", "Local researcher", time.time()))
+    return _user(LOCAL_USER_ID)
+
+
+def create_session(user_id: str, token_hash: str, ttl_s: float) -> None:
+    now = time.time()
+    x("DELETE FROM sessions WHERE expires_at < ?", (now,))
+    x("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
+      (token_hash, user_id, now, now + ttl_s))
+
+
+def session_user(token_hash: str) -> dict | None:
+    rows = q(f"SELECT {_USER_COLS} FROM sessions s JOIN users u ON u.id = s.user_id "
+             "WHERE s.token_hash=? AND s.expires_at > ?", (token_hash, time.time()))
+    return dict(rows[0]) if rows else None
+
+
+def delete_session(token_hash: str) -> None:
+    x("DELETE FROM sessions WHERE token_hash=?", (token_hash,))
 
 
 # ---------------------------------------------------------------- papers
@@ -275,6 +345,11 @@ def trace_totals(pid: str) -> dict:
     return {"llm_calls": r["calls"], "tokens_in": r["tin"], "tokens_out": r["tout"], "cost_usd": round(r["cost"], 5),
             "tool_calls": tools, "agents": agents, "compressions": compress,
             "by_model": [dict(m) for m in by_model]}
+
+
+def spend_since(ts: float) -> float:
+    """LLM spend across all projects since `ts` (daily cap)."""
+    return q("SELECT COALESCE(SUM(cost_usd),0) AS c FROM trace WHERE kind='llm' AND ts>=?", (ts,))[0]["c"]
 
 
 # ---------------------------------------------------------------- cache

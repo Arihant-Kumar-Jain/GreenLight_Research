@@ -9,8 +9,9 @@ import * as THREE from 'three'
 import type { GraphData } from '../api'
 import { createStage, GO, INFO, MUTED, pointCloud, pointsMaterial, STOP, WAIT } from './core'
 
-export const CLUSTER_COLORS = [0x3ee07f, 0x8ea6ff, 0xf5b841, 0xc084fc, 0x22d3ee, 0xfb7185, 0xa3e635, 0xfdba74, 0x94a3b8]
-const EDGE = { cites: new THREE.Color(0x3ee07f), similar: new THREE.Color(0x8ea6ff), idea: new THREE.Color(0xf5b841) }
+export const CLUSTER_COLORS = [0x0b7a47, 0x1d4ed8, 0xb45309, 0x7a3e6b, 0x0e7490, 0xbe185d, 0x4d7c0f, 0x8a5a2b, 0x64748b]
+const EDGE = { cites: new THREE.Color(0x0b7a47), similar: new THREE.Color(0x155e75), idea: new THREE.Color(0xa85f00) }
+const PAPER = new THREE.Color(0xffffff)
 const IDEA_LEN: Record<string, number> = { 'same idea': 1.6, 'very close': 2.4, related: 3.4, background: 4.4 }
 
 export type EdgeKind = 'cites' | 'similar' | 'idea'
@@ -32,10 +33,13 @@ export default function PaperGraph({ data, colorBy, show, selected, cluster, onS
   useEffect(() => {
     const el = mount.current
     if (!el) return
-    const st = createStage(el, { fov: 45, bloom: [0.7, 0.5, 0.12] })
+    const st = createStage(el, { fov: 45 })
     if (!st) return
     const { scene, camera, renderer, track, dpr } = st
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4))
+    scene.add(new THREE.AmbientLight(0xffffff, 1.5))
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.2)
+    keyLight.position.set(3, 5, 6)
+    scene.add(keyLight)
 
     // ---------------------------------------------------------------- simulation state
     type N = { id: string; p: THREE.Vector3; v: THREE.Vector3; cluster: number; r: number; mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial }
@@ -45,7 +49,7 @@ export default function PaperGraph({ data, colorBy, show, selected, cluster, onS
     const nodes = new Map<string, N>()
     ids.forEach((id, i) => {
       const n = info.get(id)
-      const mat = track(new THREE.MeshStandardMaterial({ color: 0x0b1410, emissive: new THREE.Color(0xffffff), emissiveIntensity: 1.6, roughness: 0.4 }))
+      const mat = track(new THREE.MeshStandardMaterial({ color: 0x9aa8a1, emissive: new THREE.Color(0xffffff), emissiveIntensity: 0.2, roughness: 0.5 }))
       const mesh = new THREE.Mesh(geo, mat)
       const r = id === 'IDEA' ? 0.42 : 0.1 + Math.min(0.22, Math.log10(1 + (n?.citations ?? 0)) * 0.06) + (n?.relation ? 0.05 : 0)
       mesh.scale.setScalar(r)
@@ -54,7 +58,7 @@ export default function PaperGraph({ data, colorBy, show, selected, cluster, onS
       const p = id === 'IDEA' ? new THREE.Vector3() : new THREE.Vector3().randomDirection().multiplyScalar(3 + (i % 7))
       nodes.set(id, { id, p, v: new THREE.Vector3(), cluster: n?.cluster ?? -1, r, mesh, mat })
     })
-    const ideaHalo = new THREE.Mesh(track(new THREE.TorusGeometry(0.75, 0.01, 8, 128)), track(new THREE.MeshBasicMaterial({ color: 0xf5b841, transparent: true, opacity: 0.6 })))
+    const ideaHalo = new THREE.Mesh(track(new THREE.TorusGeometry(0.75, 0.01, 8, 128)), track(new THREE.MeshBasicMaterial({ color: 0xa85f00, transparent: true, opacity: 0.7 })))
     scene.add(ideaHalo)
 
     const edges = data.edges.filter((e) => nodes.has(e.source) && nodes.has(e.target))
@@ -100,7 +104,7 @@ export default function PaperGraph({ data, colorBy, show, selected, cluster, onS
     const lp = new Float32Array(edges.length * 6), lc = new Float32Array(edges.length * 6)
     lineGeo.setAttribute('position', new THREE.BufferAttribute(lp, 3))
     lineGeo.setAttribute('color', new THREE.BufferAttribute(lc, 3))
-    const lineMat = track(new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }))
+    const lineMat = track(new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false }))
     scene.add(new THREE.LineSegments(lineGeo, lineMat))
     const cites = edges.filter((e) => e.type === 'cites')
     const PER = 3
@@ -176,9 +180,11 @@ export default function PaperGraph({ data, colorBy, show, selected, cluster, onS
         n.mesh.position.copy(n.p)
         const meta = info.get(n.id)
         const base = n.id === 'IDEA' ? WAIT : cb === 'cluster' ? (n.cluster >= 0 ? tmp.set(CLUSTER_COLORS[n.cluster % 9]) : MUTED) : credColor(meta?.credibility ?? null)
-        n.mat.emissive.copy(base)
         const f = focus(n.id) || n.id === 'IDEA'
-        n.mat.emissiveIntensity = (f ? 1.7 : 0.18) * (n.id === hovered || n.id === sel ? 1.6 : 1)
+        // Light surface: out-of-focus nodes fade toward the paper instead of going dark.
+        n.mat.color.copy(base).lerp(PAPER, f ? 0 : 0.82)
+        n.mat.emissive.copy(n.mat.color)
+        n.mat.emissiveIntensity = n.id === hovered || n.id === sel ? 0.55 : 0.25
         const target = n.r * (n.id === hovered || n.id === sel ? 1.6 : 1)
         n.mesh.scale.setScalar(n.mesh.scale.x + (target - n.mesh.scale.x) * 0.2)
       }
@@ -189,7 +195,7 @@ export default function PaperGraph({ data, colorBy, show, selected, cluster, onS
         lp.set([a.x, a.y, a.z, b.x, b.y, b.z], k * 6)
         const on = sh[e.type as EdgeKind] && (focus(e.source) && focus(e.target) || (sel != null && (e.source === sel || e.target === sel)))
         const strength = !sh[e.type as EdgeKind] ? 0 : on ? (e.type === 'similar' ? 0.35 : 0.8) : 0.04
-        tmp.copy(EDGE[e.type as EdgeKind]).multiplyScalar(strength)
+        tmp.copy(EDGE[e.type as EdgeKind]).lerp(PAPER, 1 - strength)
         lc.set([tmp.r, tmp.g, tmp.b, tmp.r, tmp.g, tmp.b], k * 6)
       })
       lineGeo.attributes.position.needsUpdate = true
@@ -203,7 +209,7 @@ export default function PaperGraph({ data, colorBy, show, selected, cluster, onS
           P.lerpVectors(a, b, u)
           const i = k * PER + j
           flow.pos.set([P.x, P.y, P.z], i * 3)
-          flow.col.set([0.6, 1, 0.75], i * 3)
+          flow.col.set([0.043, 0.478, 0.278], i * 3)
           flow.alpha[i] = on ? Math.sin(u * Math.PI) : 0
           flow.size[i] = 0.16
         }
