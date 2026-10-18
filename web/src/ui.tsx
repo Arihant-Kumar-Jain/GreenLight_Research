@@ -58,14 +58,17 @@ export function Button({ children, onClick, variant = 'primary', disabled, class
 export function credTone(c: Credibility | null | undefined): Tone {
   if (!c) return 'neutral'
   if (c.retracted) return 'stop'
+  // Low confidence (e.g. too new to have citations): the score is a lower bound, so don't paint it as a warning.
+  if (c.confidence === 'low') return 'neutral'
   return c.score >= 72 ? 'go' : c.score >= 55 ? 'info' : c.score >= 38 ? 'wait' : 'stop'
 }
 
 export function CredBadge({ c, onClick }: { c: Credibility | null | undefined; onClick?: () => void }) {
   if (!c) return <Badge title="Not scored yet">cred –</Badge>
   return (
-    <button onClick={onClick} className="inline-flex" title={`Credibility ${c.score}/100 · ${c.tier} · confidence ${c.confidence}`}>
-      <Badge tone={credTone(c)}>{c.retracted ? 'RETRACTED' : `${c.score}`}<span className="font-normal opacity-70">/100</span></Badge>
+    <button onClick={onClick} className="inline-flex"
+      title={`Credibility ${c.score}/100, ${c.tier}, confidence ${c.confidence}${c.confidence === 'low' ? ': too little citation data to judge (often a new paper), so treat it as a lower bound' : ''}`}>
+      <Badge tone={credTone(c)}>{c.retracted ? 'RETRACTED' : `${c.confidence === 'low' ? '~' : ''}${c.score}`}<span className="font-normal opacity-70">/100</span></Badge>
     </button>
   )
 }
@@ -104,11 +107,13 @@ export function Cite({ id }: { id: string }) {
 const INLINE = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`|\[(?:P\d+(?:\s*[,;]\s*P\d+)*)\]|\[[^\]]+\]\((?:https?:\/\/)[^)\s]+\)|⚠️)/g
 
 function inline(text: string, key = 0): ReactNode[] {
+  // A fresh regex per call: inline() recurses for **bold** / *em*, and a shared /g regex's lastIndex would be reset by
+  // the inner call, making the outer loop find the same match forever (froze the Report tab).
+  const re = new RegExp(INLINE.source, 'g')
   const out: ReactNode[] = []
   let last = 0
   let m: RegExpExecArray | null
-  INLINE.lastIndex = 0
-  while ((m = INLINE.exec(text))) {
+  while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index))
     const t = m[0]
     const k = `${key}-${m.index}`

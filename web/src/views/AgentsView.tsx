@@ -54,7 +54,9 @@ export default function AgentsView({ p, events }: { p: Project; events: TraceEve
   const nodeLabel = (name: string) => {
     const a = agentStats(name, p.papers, events)
     const parts = [a.papers && plural(a.papers, 'paper'), a.searches && plural(a.searches, 'search', 'searches'), a.passages && plural(a.passages, 'passage')]
-    return parts.filter(Boolean).join(' · ') || (byName.get(name)?.done ? 'done' : 'working')
+    const n = byName.get(name)
+    const active = p.running && !!n && !n.done && now - n.last < 30
+    return parts.filter(Boolean).join(' · ') || (active ? 'working' : 'done')
   }
   const shown = events.filter((e) => (filter === 'all' || e.kind === filter) && (!agent || e.agent === agent)).slice(-400).reverse()
 

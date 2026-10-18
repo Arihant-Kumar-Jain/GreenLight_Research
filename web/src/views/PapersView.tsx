@@ -1,6 +1,7 @@
 import { ExternalLink, FileText, Loader2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { api, type Paper, type Project } from '../api'
+import { bestRelevance, relevanceTier } from '../research'
 import { Badge, Button, Card, CredBadge, credTone, cx, Meter } from '../ui'
 
 const REL_TONE = { 'same idea': 'stop', 'very close': 'wait', related: 'info', background: 'neutral' } as const
@@ -99,6 +100,8 @@ export function PaperDrawer({ paper: p, projectId, onClose, onUpdate }: { paper:
 }
 
 export default function PapersView({ p, onOpen }: { p: Project; onOpen: (id: string) => void }) {
+  const best = useMemo(() => bestRelevance(p.papers), [p.papers])
+  const tier = (x: Paper) => relevanceTier(x.relevance, best)
   const [sort, setSort] = useState<'relevance' | 'credibility' | 'citations' | 'year'>('relevance')
   const [q, setQ] = useState('')
   const rel = useMemo(() => new Map((p.stats?.review?.closest ?? []).map((c, i) => [c.id, { ...c, rank: i }])), [p.stats])
@@ -135,7 +138,7 @@ export default function PapersView({ p, onOpen }: { p: Project; onOpen: (id: str
                   {x.retracted && <Badge tone="stop">retracted</Badge>}
                   {x.audit?.flags.some((f) => f.verified) && <Badge tone="stop">red flags</Badge>}
                   {x.read && <Badge tone="info">read</Badge>}
-                  {x.relevance != null && <Badge tone={x.relevance >= 0.8 ? 'go' : x.relevance >= 0.4 ? 'wait' : 'neutral'} title={`Cross-encoder relevance to your idea (${x.relevance_by})`}>relevance {Math.round(x.relevance * 100)}%</Badge>}
+                  {tier(x) && <Badge tone={tier(x) === 'high' ? 'go' : 'neutral'} title={`Reranker relevance to your idea, relative to the best match here (${x.relevance_by}: ${x.relevance?.toFixed(3)})`}>{tier(x) === 'high' ? 'highly relevant' : 'related'}</Badge>}
                 </div>
                 <div className="mt-1 font-medium leading-snug">{x.title}</div>
                 <div className="mt-0.5 text-xs text-muted">

@@ -1,7 +1,7 @@
 import { Activity, BookOpen, Bot, Check, FileText, Grid3x3, Loader2, MessagesSquare, NotebookPen, Orbit, RotateCcw, Scale, Network, Share2, Sparkles, Square } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Project, type TraceEvent } from './api'
-import { RELEVANT, researchStats } from './research'
+import { readableEvidence, researchStats } from './research'
 import { GoogleButton, useAuth, UserMenu } from './auth'
 import { Logo } from './Home'
 import TrafficLight from './TrafficLight'
@@ -66,7 +66,7 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
             {p.status === 'error' && <p className="mt-4 text-sm text-stop">{p.error}</p>}
             <div className="mt-5 space-y-2">
               {latest.map((e) => (
-                <div key={e.id} className="animate-rise text-sm"><span className="text-muted">{e.agent} · </span>{e.title}</div>
+                <div key={e.id} className="animate-rise text-sm"><span className="text-muted">{e.agent}: </span>{e.title.startsWith(e.agent) ? e.title.slice(e.agent.length).replace(/^[\s:·-]+/, '') : e.title}</div>
               ))}
             </div>
           </Card>
@@ -74,7 +74,7 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
         {v && (
           <Card className="p-6">
             <SectionTitle right={<Badge tone={v.light === 'green' ? 'go' : v.light === 'amber' ? 'wait' : 'stop'}>{LIGHT[v.light].call}</Badge>}>Why this verdict</SectionTitle>
-            <ul className="space-y-2 text-[15px]">{v.reasons.map((r, i) => <li key={i} className="flex gap-2"><span className="text-muted">{i + 1}.</span><Markdown text={r} className="[&_p]:m-0" /></li>)}</ul>
+            <ol className="space-y-2.5 text-[15px]">{v.reasons.map((r, i) => <li key={i} className="flex items-baseline gap-2.5"><span className="w-5 shrink-0 text-right tabular-nums text-muted">{i + 1}.</span><Markdown text={readableEvidence(r)} className="min-w-0 [&_p]:m-0" /></li>)}</ol>
             {v.guardrails.length > 0 && (
               <div className="mt-5 rounded-xl border border-wait/30 bg-wait-soft/40 p-4 text-sm">
                 <div className="mb-1 font-semibold text-wait">Guardrail applied: the Speaker said {v.speaker_light.toUpperCase()}, evidence rules made it {v.light.toUpperCase()}</div>
@@ -86,8 +86,8 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
         )}
         {v && (
           <div className="grid gap-6 md:grid-cols-2">
-            <Card className="p-6"><SectionTitle>How to make it novel</SectionTitle><ul className="list-disc space-y-1.5 pl-4 text-sm">{v.differentiation.map((d, i) => <li key={i}><Markdown text={d} className="[&_p]:m-0" /></li>)}</ul></Card>
-            <Card className="p-6"><SectionTitle>Next steps</SectionTitle><ul className="list-disc space-y-1.5 pl-4 text-sm">{v.next_steps.map((d, i) => <li key={i}><Markdown text={d} className="[&_p]:m-0" /></li>)}</ul></Card>
+            <Card className="p-6"><SectionTitle>How to make it novel</SectionTitle><ul className="list-disc space-y-1.5 pl-4 text-sm">{v.differentiation.map((d, i) => <li key={i}><Markdown text={readableEvidence(d)} className="[&_p]:m-0" /></li>)}</ul></Card>
+            <Card className="p-6"><SectionTitle>Next steps</SectionTitle><ul className="list-disc space-y-1.5 pl-4 text-sm">{v.next_steps.map((d, i) => <li key={i}><Markdown text={readableEvidence(d)} className="[&_p]:m-0" /></li>)}</ul></Card>
           </div>
         )}
         {review && (
@@ -130,6 +130,9 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
             <SectionTitle>Novelty score</SectionTitle>
             <div className="font-display text-6xl">{p.novelty.score ?? '–'}<span className="text-2xl text-muted">/100</span></div>
             <p className="mt-2 text-xs text-muted">Share of the idea's components (core weighted ×2) not covered by prior work, counting only overlaps backed by a verified quote.</p>
+            {p.novelty.already_done_by.length === 0 && (p.novelty.score ?? 100) <= 20 && (
+              <p className="mt-3 text-sm">Each component appears somewhere in prior work, but no single paper covers all the core ones. The value is in the combination{p.verdict && p.verdict.light !== 'red' ? ', which is why the verdict is not red' : ''}.</p>
+            )}
             {p.novelty.already_done_by.length > 0 && <div className="mt-3 text-sm text-stop">Covers every core component: <Markdown className="inline [&_p]:inline" text={`[${p.novelty.already_done_by.map((d) => d.paper_id).join(', ')}]`} /></div>}
           </Card>
         )}
@@ -142,7 +145,7 @@ function Overview({ p, events }: { p: Project; events: TraceEvent[] }) {
         <Card className="p-6">
           <SectionTitle>Research so far</SectionTitle>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <Stat k="Papers found" v={r.papers} /><Stat k={`Relevant (≥${Math.round(RELEVANT * 100)}%)`} v={r.relevant} />
+            <Stat k="Papers found" v={r.papers} /><Stat k="Relevant" v={r.relevant} />
             <Stat k="Read in full" v={r.read} /><Stat k="Credibility scored" v={`${r.scored}${r.strong ? ` (${r.strong} strong)` : ''}`} />
             <Stat k="Passages retrieved" v={r.passages} /><Stat k="Literature searches" v={r.searches} />
             <Stat k="Findings noted" v={r.findings} /><Stat k="Gaps noted" v={r.gaps} />

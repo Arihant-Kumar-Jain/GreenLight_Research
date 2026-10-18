@@ -118,7 +118,10 @@ export default function Intake({ id }: { id: string }) {
                                       const on = picks[i] === o && !own[i]?.trim()
                                       return (
                                         <button key={o} aria-pressed={on} disabled={view?.busy}
-                                          onClick={() => { setPicks((s) => ({ ...s, [i]: s[i] === o ? '' : o })); setOwn((s) => ({ ...s, [i]: '' })) }}
+                                          onClick={() => {
+                                            if (/^other\b/i.test(o)) { setPicks((s) => ({ ...s, [i]: '' })); document.getElementById(`own-${m.id}-${i}`)?.focus(); return }
+                                            setPicks((s) => ({ ...s, [i]: s[i] === o ? '' : o })); setOwn((s) => ({ ...s, [i]: '' }))
+                                          }}
                                           className={cx('rounded-full border px-3 py-1 text-[13px] transition',
                                             on ? 'border-go bg-go text-on-go' : 'border-line hover:border-go hover:text-go')}>
                                           {o}
@@ -127,7 +130,7 @@ export default function Intake({ id }: { id: string }) {
                                     })}
                                   </div>
                                 )}
-                                <input value={own[i] ?? ''} onChange={(e) => setOwn((s) => ({ ...s, [i]: e.target.value }))}
+                                <input id={`own-${m.id}-${i}`} value={own[i] ?? ''} onChange={(e) => setOwn((s) => ({ ...s, [i]: e.target.value }))}
                                   onKeyDown={(e) => { if (e.key === 'Enter' && answered === questions.length) send(answerLines()) }}
                                   placeholder={q.options.length ? 'Or type your own answer' : 'Your answer'} aria-label={`Answer to question ${i + 1}`}
                                   className="w-full rounded-lg border border-line bg-bg px-3 py-1.5 text-[13.5px] outline-none focus:border-go/50" />
@@ -151,6 +154,16 @@ export default function Intake({ id }: { id: string }) {
                 </div>
               ))}
               {view?.busy && <div className="flex"><div className="rounded-2xl border border-line bg-surface px-4 py-3"><Typing /></div></div>}
+              {/* Start from the chat too: the brief panel (and its button) is hidden on narrow screens. */}
+              {view?.project.brief && !view.busy && (
+                <div className={cx('animate-rise rounded-2xl border border-go/30 bg-go-soft px-4 py-4', !ready && 'lg:hidden')}>
+                  <div className="font-semibold">{ready ? 'Your brief is ready.' : 'You can start now; the agents will note their assumptions.'}</div>
+                  <p className="mt-1 text-sm text-muted">
+                    {view.project.brief.research_question || view.project.brief.title}
+                  </p>
+                  <Button onClick={start} disabled={starting} className="mt-3"><Rocket size={16} /> {starting ? 'Launching agents…' : 'Start deep research'}</Button>
+                </div>
+              )}
               <div ref={end} />
             </div>
           </div>
