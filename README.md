@@ -142,27 +142,28 @@ worse); anything still unsupported is marked ⚠️ in the answer.
 
 **Live end-to-end runs**, same idea ("per-token sparse mixture of LoRA experts for multi-task instruction tuning"):
 
-| | OpenRouter (Nemotron) | **Nebius Token Factory** (Nemotron) |
-|---|---|---|
-| Wall time / cost | 9.3 min / $0.0995 | **6.2 min / $0.195** |
-| Median LLM call latency | – | **0.95 s** |
-| Agents / LLM calls / tool calls | 20 / 217 / 71 | 19 / 168 / 38 |
-| Cost by model | – | Super $0.180 (62 calls), Ultra $0.008 (1), Nano $0.005 (37), Qwen3 embed $0.001 (68) |
-| Research rounds / scouts | 2 / 6 (Critic rejected round 1) | 1 / 3 (Critic approved) |
-| Papers collected / scored / audited | 180 / 80 / 8 | 97 / 80 / 5 (all 97 relevance-ranked) |
-| Context compressions | 17.3k → 8.6k, 25.7k → 10.8k tokens | 16.2k → 9.4k, 25.8k → 10.1k tokens |
-| Reranker calls / errors | – (added later) | 90 / 0 |
-| Novelty | 0/100 (P7 covered every core component) | 50/100 (strict judge downgraded 19 "full" → "partial"; 4 unverified quotes dropped) |
-| Verdict | **AMBER**, guardrails agreed | **GREEN**, no guardrail fired |
-| Report citation check | 1 supported / 2 partial / 0 unsupported (before the [P#] fix) | 3 / 9 / 3 of 15 claims |
-| Relationship graph | 60 papers, 36 citation links, 89 similarity, 5 clusters | 60 papers, **71 citation links**, 84 similarity, 7 clusters |
+| | OpenRouter (Nemotron) | Nebius, before fix | **Nebius, after verdict fix** |
+|---|---|---|---|
+| Wall time / cost | 9.3 min / $0.0995 | 6.2 min / $0.195 | **7.4 min / $0.290** |
+| Median LLM call latency | – | 0.95 s | – |
+| Agents / LLM calls / tool calls | 20 / 217 / 71 | 19 / 168 / 38 | 19 / 202 / 57 |
+| Cost by model | – | Super $0.180 (62 calls), Ultra $0.008 (1), Nano $0.005 (37), Qwen3 embed $0.001 (68) | – |
+| Research rounds / scouts | 2 / 6 (Critic rejected round 1) | 1 / 3 (Critic approved) | 2 / 5 (round 2 mandatory) |
+| Papers collected / scored / audited | 180 / 80 / 8 | 97 / 80 / 5 (all 97 relevance-ranked) | 116 / 80 / – (MoLoRA found again) |
+| Context compressions | 17.3k → 8.6k, 25.7k → 10.8k tokens | 16.2k → 9.4k, 25.8k → 10.1k tokens | 3 |
+| Reranker calls / errors | – (added later) | 90 / 0 | – |
+| Novelty | 0/100 (P7 covered every core component) | 50/100 (strict judge downgraded 19 "full" → "partial"; 4 unverified quotes dropped) | 21/100 (C1, C3 full; 0 strict downgrades; 13 unverified quotes dropped) |
+| Verdict | **AMBER**, guardrails agreed | **GREEN**, no guardrail fired | **AMBER** (Speaker at temperature 0) |
+| Report citation check | 1 supported / 2 partial / 0 unsupported (before the [P#] fix) | 3 / 9 / 3 of 15 claims | 3 / 11 / 2 of 16 claims |
+| Relationship graph | 60 papers, 36 citation links, 89 similarity, 5 clusters | 60 papers, **71 citation links**, 84 similarity, 7 clusters | – |
 
-Honest reading: Nebius is faster (6.2 vs 9.3 min, sub-second calls) and costs more per run (its Super price is higher).
-The two runs disagree on the verdict. The Nebius run searched less (one round: the Critic approved it) and the new
-strict novelty judge treats "same mechanism, different setting" (LLaVA-MoLE is vision-language) as only partial
-overlap, which lifted novelty to 50. Closest work (MoLoRA, MixLoRA, LLaVA-MoLE) does per-token LoRA-expert routing
-with load balancing, so AMBER is the more defensible call; verdict stability across runs is an open issue (ideas:
-force two research rounds, a guardrail on "very close" papers with high relevance, majority vote over 3 Speakers).
+Honest reading: the first Nebius run went GREEN, mainly because of our own code, not the provider. That run searched
+less (the Critic approved round 1 and MoLoRA, the closest paper, was never found), and a new strict novelty judge
+downgraded every overlap to "partial" while the Lead Researcher's own review said the core was covered. Same models
+still differ between runs (temperature 0.2-0.3 agents, different serving stacks, live web). Fix (`f9aca8d`): a second
+research round is mandatory, the strict judge only downgrades *setting* components (a mechanism used in another
+domain still counts as fully covered), judges run at temperature 0, and a new guardrail keeps the verdict at least
+AMBER when the review finds every core component covered. Re-run on Nebius: **AMBER**, two rounds, MoLoRA found.
 
 **Retrieval eval** (`make eval P=<id>`; 40 synthetic paraphrased questions written from the project's own passages,
 gold = exact source chunk, 180-paper corpus; partial run, the "hard" no-shared-vocabulary set was not run yet):
@@ -198,7 +199,7 @@ bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default on
 | Chat answer before citation normalisation | wrote "(P66)" → 0 claims checked → fixed: normalised to [P66], all checkable |
 | Local reranker first load | ~160 s incl. 2.3 GB model download (bge-reranker-v2-m3), then cached |
 
-**Offline tests**: 29 passing (`make test`), incl. Sachit's auth / spend-cap guards: harness (parallel tools, loop detection, review gate, budget-forced
+**Offline tests**: 30 passing (`make test`), incl. Sachit's auth / spend-cap guards: harness (parallel tools, loop detection, review gate, budget-forced
 finish, tier-1/2 compression with tool-call pairing checked on every request, child budgets, chat memory layers),
 credibility, quote verification, citation normalisation, guardrails, strict title identity, graph citation matching
 + clustering, MMR, reranker fallback, gate calibration.
@@ -271,7 +272,8 @@ retrieval eval table + gate calibration.
 - The retrieval eval was only partly run (paraphrased set); the "hard" vocabulary-mismatch set and gate calibration
   need `make eval` once. Until then the evidence gate is off.
 - NVIDIA NIM and vLLM reranker backends are implemented but untested without keys/GPU here.
-- Verdicts are not yet stable across runs: the same idea got AMBER (OpenRouter run) and GREEN (Nebius run); see Benchmarks.
+- Verdict stability: fixed for the tested idea (AMBER on OpenRouter and on Nebius after the fix); only 3 runs so far,
+  so stability on other ideas is not yet measured.
 - A pipeline run takes ~9 min; the dev server's `--reload` kills a running analysis when backend files change.
 
 ## Demo checklist (15 min before judging)
