@@ -324,3 +324,7 @@ deploy/          Nebius deploy guide, Caddy, backups      docs/   benchmark char
 ```
 
 Not legal or career advice: check the sources before relying on a verdict.
+
+## License
+
+[MIT](LICENSE)

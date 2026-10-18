@@ -3,6 +3,7 @@ name = "glr"
 version = "0.1.0"
 description = "GreenLight Research: multi-agent deep research that tells you if your research idea was already done"
 requires-python = ">=3.12"
+license = "MIT"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
