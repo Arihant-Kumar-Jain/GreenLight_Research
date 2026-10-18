@@ -1,0 +1,81 @@
+"""Credibility score, quote verification and verdict guardrails (deterministic parts)."""
+
+from glr import credibility, db
+from glr.agents import verdict
+from glr.verify import claims, quote_ok
+
+STRONG = {"title": "LoRA", "published": "2021-06-17", "citations": 12000, "citation_percentile": 0.999, "fwci": 40,
+          "openalex_id": "W1", "authors": [{"name": "A", "h_index": 60}, {"name": "B", "h_index": 30}],
+          "venue": {"name": "ICLR", "type": "conference", "h_index": 300},
+          "hf": {"github": "x", "models": 480, "datasets": 24, "spaces": 235, "upvotes": 67}}
+WEAK = {"title": "Weak", "published": "2022-01-01", "citations": 2, "openalex_id": "W2",
+        "authors": [{"name": "C", "h_index": 2}], "venue": {"name": "arXiv", "type": "repository"}}
+
+
+def test_strong_beats_weak():
+    s, w = credibility.score(STRONG), credibility.score(WEAK)
+    assert s["score"] > 75 > 40 > w["score"]
+    assert s["confidence"] == "high"
+
+
+def test_retracted_is_zero():
+    r = credibility.score({**STRONG, "is_retracted": True})
+    assert r["score"] == 0 and r["tier"] == "retracted"
+
+
+def test_new_paper_not_punished_for_citations():
+    import datetime
+    new = {**WEAK, "published": datetime.date.today().isoformat(), "authors": [{"name": "D", "h_index": 70}]}
+    r = credibility.score(new)
+    assert r["confidence"] == "low" and any("too new" in n for n in r["notes"])
+
+
+def test_verified_flags_lower_integrity():
+    flagged = {**STRONG, "audit": {"flags": [{"type": "no_baselines", "verified": True},
+                                             {"type": "other", "verified": False}]}}
+    assert credibility.score(flagged)["score"] < credibility.score(STRONG)["score"]
+
+
+def test_quote_ok():
+    text = "We propose Low-Rank Adaptation, or LoRA, which freezes the pre-trained model weights and injects trainable"
+    assert quote_ok("which freezes the pre-trained model weights and injects", text)
+    assert quote_ok("which freezes the pretrained model weights and injects", text)  # near-verbatim
+    assert not quote_ok("which fine-tunes all model weights with a learned router", text)
+
+
+def test_claims_extraction():
+    cl = claims("LoRA reduces parameters by 10,000x [P1]. Nothing cited here. Adapters add latency [P2, P3].")
+    assert [c["refs"] for c in cl] == [["P1"], ["P2", "P3"]]
+
+
+def test_guardrail_forces_red_and_thin_evidence_amber():
+    pid = db.create_project("idea")
+    for i in range(12):
+        db.add_paper(pid, f"k{i}", {"title": f"t{i}", "credibility": {"score": 60}})
+    ruling = {"light": "green", "headline": "Go", "reasons": []}
+    nov = {"already_done_by": [{"paper_id": "P1"}], "components": []}
+    v = verdict.apply(pid, ruling, nov, {"confidence": "high"})
+    assert v["light"] == "red" and v["speaker_light"] == "green" and v["guardrails"]
+    pid2 = db.create_project("idea2")
+    db.add_paper(pid2, "k", {"title": "t", "credibility": {"score": 60}})
+    v2 = verdict.apply(pid2, ruling, {"already_done_by": [], "components": []}, {"confidence": "high"})
+    assert v2["light"] == "amber"
+
+
+def test_same_title_is_strict():
+    from glr.sources.openalex import same_title
+    assert same_title("LoRA: Low-Rank Adaptation of Large Language Models",
+                      "LoRA: low rank adaptation of large language models.")
+    assert not same_title("LoRA: Low-Rank Adaptation of Large Language Models",
+                          "LoRTA: Low Rank Tensor Adaptation of Large Language Models")
+
+
+def test_bracket_citations():
+    from glr.agents.writer import bracket_citations
+    out = bracket_citations("P7 does X (P12, P3). Already [P1]. P99 unknown.", {"P1", "P3", "P7", "P12"})
+    assert out == "[P7] does X [P12, P3]. Already [P1]. P99 unknown."
+
+
+def test_unknown_citations_are_not_zero():
+    r = credibility.score({**WEAK, "citations": None, "openalex_id": None})
+    assert r["components"][0]["score"] == 25 and r["confidence"] == "low"

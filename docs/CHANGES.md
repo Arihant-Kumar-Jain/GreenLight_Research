@@ -1,0 +1,59 @@
+# Team change log
+
+Shared context for the team (and their Claude Code sessions: `CLAUDE.md` imports this file). Newest first.
+For each change: what, why, new env vars, how to test, open TODOs.
+
+---
+
+## 2026-10-18 — Arihant (with Claude): GreenLight Research v0.1, from scratch
+
+**What.** New project next to GreenLight, for research ideas instead of startup ideas. Reuses GreenLight's stack
+(Nemotron roles via `providers.py`/`llm.py`, Tavily module with credit budget, `privacy.py`, the Chamber debate +
+guardrail pattern, traffic light, glass shader, Chamber three.js scene) and lessons from
+[researchAgent](https://github.com/Sachitbansal/researchAgent) (hand-written loop, tool pairing rules, arXiv pacing).
+No GreenLight code was changed (only its git-ignored `.claude/launch.json` got two preview entries for this project).
+
+- **Harness** (`backend/glr/harness/`): `Agent` runtime with parallel tool calls, budgets (USD/calls/time, parent →
+  child), loop detection, guard + review hooks, forced finish; `Context` 3-tier compression; `@tool` schemas from
+  signatures; `swarm()`.
+- **Agents**: intake chat → planner → Lead Researcher dispatching Scout swarms (rounds gated by a Critic) → reader →
+  credibility scorer + Auditor → Novelty Mapper (quote-verified) → Chamber (Proponent/Skeptic/Speaker) → guardrails →
+  report writer + citation checker → research chat (to-and-fro, 3-layer memory).
+- **Sources**: arXiv, OpenAlex (+ citation graph hops), Hugging Face Papers (adoption: models/datasets/Spaces), Semantic
+  Scholar (optional / fallback), Tavily search + extract (full texts).
+- **Credibility** (`credibility.py`): deterministic 0-100 from impact / authors / venue / adoption / integrity.
+- **UI**: React 19 + Tailwind 4 + three.js: landing hero (liquid-glass idea orb in a spiral galaxy of papers, scout
+  comets, bloom + lens), intake chat with quick replies and live brief, workspace with live agent graph + trace,
+  3D Paper Galaxy, papers with credibility breakdowns, novelty matrix, 3D Chamber, report with citation check, chat.
+
+**Env vars**: `NEBIUS_API_KEY` / `OPENROUTER_API_KEY`, `TAVILY_API_KEY`, `GLR_TAVILY_BUDGET`, `OPENALEX_API_KEY`,
+`OPENALEX_MAILTO`, `S2_API_KEY`, `HF_TOKEN`, `GLR_MAX_USD_PER_RUN`, `GLR_RESEARCH_ROUNDS`, `GLR_MAX_SCOUTS`,
+`GLR_CONTEXT_BUDGET`, `GLR_PAPERS_TO_READ`, `GLR_THINKING`, `GLR_MODEL_*`, `GLR_LLM_PROVIDER`, `GLR_DB_PATH`.
+
+**Tested.**
+- `make test`: 15 offline tests (scripted model): parallel tools, loop detection, review/reflection, budget-forced
+  finish, tier-1 + tier-2 compression with tool-call pairing checked on every request, child budgets, credibility
+  ordering, retracted = 0, new papers not punished, verified flags lower integrity, quote verification, citation
+  extraction, guardrails (forced red, thin evidence → amber), strict title identity.
+- Live sources: arXiv, OpenAlex, HF Papers work keyless; "Attention Is All You Need" scores 78/100 (strong).
+  Found + fixed: fuzzy title match merged "LoRA" with "LoRTA" (now strict); OpenAlex has LoRA mis-merged into another
+  work, so it is refused and S2 is the fallback (keyless S2 answers 429 → score marked low-confidence lower bound).
+- **Live end-to-end run** via the UI (OpenRouter + Tavily), idea "per-token sparse mixture of LoRA experts for
+  multi-task instruction tuning": intake 2 turns → plan (4 components, 5 angles) → Lead + 6 scouts over 2 rounds (the
+  Critic rejected round 1) → 180 papers, 80 scored, 8 audited → novelty 0/100 (P7 LLaVA-MoLE covers all core
+  components but on vision-language) → Speaker AMBER, guardrails agreed → report. **9.3 min, $0.0995, 20 agents,
+  217 LLM calls, 71 tool calls, real context compressions (17.3k → 8.6k tokens).** Research chat answered a follow-up
+  with 6 tool calls in 12 s for $0.004.
+- Fixed after that run: report cited bare `P7` (now normalised to `[P7]`, so the citation checker sees every claim);
+  a paper whose OpenAlex id came from a citation hop skipped bibliometrics (showed "0 citations", 10/100 → now 32/100
+  with real data); unknown citations are scored as unknown, not zero; scouts are told to write to the notebook.
+
+**Open TODOs.**
+- No auth yet (single local user). Port GreenLight's Google sign-in + per-user ownership before any public deploy.
+- SQLite only; Postgres/pgvector as in GreenLight for hosting.
+- Proof/eval page: a set of known "already done" and "open" ideas to measure verdict accuracy (none faked meanwhile).
+- Pipeline can't be cancelled mid-run; `--reload` dev server kills running analyses when backend files change.
+- Novelty mapper is generous: a verified quote proves the paper says it, not that the setting matches (C4 "evaluates
+  on FLAN/MMLU" was marked full for a vision-language paper). Consider a second, stricter judge on "full" cells.
+- Chat answers are not citation-checked yet (the report is); one chat answer contradicted the review on P122's loss.
+- The preview tool can't start the API (sandbox can't read `backend/.venv`); run `make dev` in a terminal.

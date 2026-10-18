@@ -1,0 +1,10 @@
+.env
+__pycache__/
+.venv/
+node_modules/
+web/dist/
+backend/data/glr.db*
+*.pyc
+.DS_Store
+.pytest_cache/
+.claude/settings.local.json
