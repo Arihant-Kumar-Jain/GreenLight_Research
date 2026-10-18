@@ -19,6 +19,7 @@ services:
     depends_on: [app]
     environment:
       GLR_DOMAIN: ${GLR_DOMAIN:-localhost}
+      GLR_ALT_DOMAIN: ${GLR_ALT_DOMAIN:-localhost}   # optional second domain serving the same app
     ports:
       - "80:80"
       - "443:443"
