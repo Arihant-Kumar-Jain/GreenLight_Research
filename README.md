@@ -74,8 +74,6 @@ Run 2 said **green**. Comparing it with run 1 showed why, and each finding becam
 | The Lead's own review said every core component was covered, yet nothing stopped the green | **New guardrail:** if the review finds every core component covered and very close papers exist, the verdict is at least amber |
 | LLaVA-MoLE does the same routing in a vision-language model and was easy to miss | **Two perspective scouts in every first round**, enforced in code: "same mechanism, other field or modality" and "skeptical reviewer: is this incremental?" |
 
-![Papers per run](docs/benchmarks/04_papers_and_rounds.png)
-![Novelty per run](docs/benchmarks/05_novelty_per_run.png)
 
 **Speaker panel.** One judge is a single point of failure, so three Nemotron Ultra Speakers vote. Our first panel
 sampled two of them at temperature 0.6, and sampling made their structured output unreliable (1 of 3 votes usable in
