@@ -19,13 +19,13 @@ Hackathon: NVIDIA × Nebius Build Week, Berlin (open models; sponsors: Nemotron 
 
 | | |
 |---|---|
-| URL | **https://glr.softkernel.dev** (live). `https://greenlightresearch.tech` has certs too, but get.tech's nameservers were still out of sync at last check, so it resolves only intermittently. |
+| URL | **https://greenlightresearch.tech** and **https://glr.softkernel.dev**, both live (same app; `www` redirects to the bare `.tech` domain). |
 | VM | Nebius Compute `ivory-parrot-instance-2` (id `computeinstance-e04bktm8gpd0g5mxg5`), project `default-project-eu-west2`, `cpu-d3` 4 vCPU / 16 GiB, Ubuntu 24.04, **static IP 213.239.172.224**, about $0.15/h. **Stop or delete it after the hackathon.** |
 | SSH | `ssh -i ~/.ssh/nebius sachit@213.239.172.224` (key made this session, no passphrase) |
 | App dir | `~/GreenLight_Research` (git checkout of main). `.env` there is chmod 600; never print it. |
 | Deploy | `ssh -i ~/.ssh/nebius sachit@213.239.172.224 '~/update.sh'` (git pull + `docker compose --profile prod up -d --build` + prune). Kills runs in progress. |
 | Stack | `docker compose --profile prod`: `app` (uvicorn, one worker on purpose since runs are in-process asyncio tasks, SQLite at volume `greenlight_research_glr_data:/data`, port 127.0.0.1:8100) + `caddy` (80/443, Let's Encrypt). |
-| Deployed | `0fd97c2` |
+| Deployed | `4229a33` (check with `git -C ~/GreenLight_Research log --oneline -1` on the VM) |
 
 **VM `.env` keys (names only):** NEBIUS_API_KEY, TAVILY_API_KEY, GOOGLE_CLIENT_ID, NVIDIA_API_KEY,
 GLR_NIM_RERANK_HOSTED_URL, GLR_NIM_RERANK_MODEL, GLR_TAVILY_BUDGET, GLR_MAX_USD_PER_RUN, GLR_RESEARCH_ROUNDS,
@@ -38,7 +38,7 @@ Google account can sign in, with spend limited by the daily caps.
 - `glr.softkernel.dev`: Cloudflare, A `glr` → 213.239.172.224, still **proxied (orange)**. It works: Caddy got the
   cert through the proxy.
 - `greenlightresearch.tech`: get.tech (OrderBox, NS `cont603385.*.orderbox-dns.com`), A `@` and `www` →
-  213.239.172.224. If it's still flaky, re-save the records at get.tech.
+  213.239.172.224. All four nameservers in sync since the night of 2026-10-18.
 - To change domains: update GLR_DOMAIN / GLR_ALT_DOMAIN / GLR_PUBLIC_BASE_URL / GLR_CORS_ORIGINS in the VM `.env`, then
   `sudo docker compose --profile prod up -d --force-recreate`.
 
