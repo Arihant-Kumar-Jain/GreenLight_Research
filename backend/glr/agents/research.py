@@ -62,7 +62,7 @@ citation-graph tool, full-text reading and the shared corpus.
 
 Method:
 - Run several distinct searches: the seed queries, then synonyms, older names, and the setting phrased differently.
-  Try more than one source. Short keyword queries work best on arXiv.
+  Use more than one source, including search_web (Tavily live web) for very recent work the indexes miss. Short keyword queries work best on arXiv.
 - When you find a very close paper, walk citation_graph(direction='citing') from it, optionally with a query, to see
   whether newer work already did the idea.
 - read_fulltext only the 1-2 closest papers, with a precise focus.

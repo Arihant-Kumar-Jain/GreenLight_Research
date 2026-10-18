@@ -185,6 +185,32 @@ def research_tools(pid: str, agent: str, *, include: set[str] | None = None) -> 
     return [t for t in tools if include is None or t.name in include]
 
 
+async def web_sweep(pid: str, queries: list[str], per_query: int = 6) -> dict:
+    """Tavily web search on the plan's key queries, every run: recent preprints, blogs, GitHub repos and leaderboards
+    that scholarly indexes lag behind. arXiv links found are added to the paper registry (and relevance-ranked)."""
+    found, added = [], []
+    with trace.scope(project_id=pid, agent="Web Scout (Tavily)"):
+        for q in [q for q in dict.fromkeys(queries) if q][:4]:
+            try:
+                res = await web.search(_clean_query(q), max_results=per_query, time_range="year")
+            except Exception as e:
+                trace.error("Tavily search failed", str(e)[:200])
+                continue
+            for r in res:
+                found.append({"query": q, "title": r["title"], "url": r["url"], "snippet": r["content"][:300],
+                              "date": r.get("published_date")})
+            ids = [arxiv.arxiv_id(r["url"]) for r in res if "arxiv.org" in r["url"]]
+            if any(ids):
+                recs = await arxiv.by_ids([i for i in ids if i])
+                rows = await papers.ingest(pid, recs, found_by="Web Scout (Tavily)")
+                added += [r["id"] for r in rows if r["new"]]
+        if added:
+            await triage(pid, added)
+        trace.info(f"Tavily web sweep: {len(found)} web results, {len(added)} new arXiv paper(s)",
+                   "\n".join(f"• {f['title']} — {f['url']}" for f in found[:12]))
+    return {"results": found, "new_papers": added}
+
+
 def notebook_text(pid: str, limit: int = 40) -> str:
     ns = db.notes(pid)
     if not ns:

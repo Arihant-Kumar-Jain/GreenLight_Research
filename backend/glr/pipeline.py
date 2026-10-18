@@ -54,6 +54,10 @@ async def run(pid: str) -> None:
             db.update_project(pid, plan=plan.model_dump(), stage="research")
 
             review = await research.run(pid, brief, plan, budget)
+            # guaranteed live-web pass (Tavily): scholarly indexes lag; scouts often stay on arXiv/OpenAlex
+            web_queries = [q for a in plan.angles for q in a.seed_queries[:1]] + list(plan.known_work_to_locate[:1])
+            sweep = await toolbox.web_sweep(pid, web_queries)
+            review["web"] = sweep
             db.update_project(pid, stats={"review": review}, stage="credibility")
 
             closest = [c["id"] for c in review.get("closest", [])]

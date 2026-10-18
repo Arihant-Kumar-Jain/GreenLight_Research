@@ -53,7 +53,8 @@ async def plan(brief: dict) -> Plan:
             Angle(title="Reviewer: is this incremental?",
                   instructions="Act as a skeptical reviewer: find the papers a reviewer would cite to argue the idea is "
                                "incremental or already done (surveys, benchmarks of the technique, strongest baselines, "
-                               "very recent preprints). Prefer recent work.",
+                               "very recent preprints). Prefer recent work: use search_web (Tavily, live web) at least "
+                               "once for results from the last 12 months, blogs, GitHub repos and leaderboards.",
                   seed_queries=[f"survey {p.summary[:60]}", f"benchmark {core[:60]}"]),
         ]
         trace.info(f"Plan: {len(p.components)} components, {len(p.angles)} search angles",

@@ -1,343 +1,329 @@
 # GreenLight Research
 
-**Has your research idea already been done?** Describe it. A swarm of open-model agents reads the literature, scores
-every paper's credibility, maps your idea against the closest work component by component, debates it in a
-parliamentary-style Chamber, and rules **green / amber / red**, with citations and paper links. Then keep talking to
-it: the research chat remembers everything and keeps searching.
+**Has your research idea already been done?** Describe it in a chat. A team of AI agents searches the literature,
+scores how credible every paper is, checks your idea against the closest work part by part, argues both sides, and
+gives a verdict: **green** (novel, pursue it), **amber** (partly done, sharpen it) or **red** (already done). Every
+claim links to the paper that supports it, and you can keep asking questions afterwards.
 
-Built for the NVIDIA × Nebius hackathon (Apps & Agentic AI). Sibling of [GreenLight](../GreenLight) (startup ideas);
-this one is for research ideas. Open models only: **NVIDIA Nemotron 3 Nano / Super / Ultra** and **Qwen3-Embedding-8B**
-on **Nebius Token Factory** (OpenRouter as a stand-in), **Tavily** for the live web, plus arXiv, OpenAlex, Hugging Face
-Papers and Semantic Scholar.
+Built for the NVIDIA × Nebius hackathon (Apps & Agentic AI) on open models only.
 
-```
-                       ┌──────────── Intake chat (to-and-fro, Nemotron Super) ────────────┐
- researcher ─ redact ─▶│ rough idea → testable brief: question, method, contributions       │
-                       └───────────────────────────────┬──────────────────────────────────┘
-                                                       ▼
- Planner ── idea → 2-5 testable components + 3-5 search angles
-    ▼
- Lead Researcher (Super, harness agent) ──dispatch_scouts──▶ Scout 1 ∥ Scout 2 ∥ Scout 3 …   (own loop + context each)
-    │   ▲ compressed scout reports only                       arXiv · OpenAlex · HF Papers · Tavily · citation graph
-    │   └── Critic (Nano) rejects thin coverage → round 2 (targeted scouts)          full-text reading · shared notebook
-    ▼
- Relevance Ranker (cross-encoder: every paper vs the idea) → Reader (full texts of the closest papers)
-    ▼
- Credibility Scorer (OpenAlex + HF + S2 → deterministic 0-100) ∥ Auditor (red flags, quote-verified)
-    ▼
- Novelty Mapper: components × closest papers, every overlap must quote the paper (verified) → strict 2nd judge on
-                 every "full" (same mechanism, other setting = partial) → novelty score
-    ▼
- Research Chamber: Proponent ∥ Skeptic (openings, rebuttals, evidence ids, struck/weak args) → Speaker (Ultra)
-    ▼
- Guardrails (code): credible paper doing all core components → RED · core component done → ≥AMBER · thin search → ≥AMBER
-    ▼
- Report Writer → Citation Checker (each [P#] sentence judged against the cited paper's passages) → Export .md
-    ▼
- Relationship Graph (citations from reference lists, embedding similarity, clusters)
-    ▼
- Research Chat (Super + full toolbox + 5-layer memory + citation self-correction) — ask, challenge, pivot, search more
-```
+> Every design choice in this README states the measurement that caused it. The numbers come from six live research
+> runs on the same test idea (18 Oct 2026), a retrieval eval on a 180-paper corpus, and component benchmarks. Charts
+> are in [`docs/benchmarks/`](docs/benchmarks/).
 
-## Sponsor tech and models
+---
 
-| Role | Model / service | Used for |
+## Powered by
+
+| | What it does in GreenLight Research | Measured |
 |---|---|---|
-| `fast` | **NVIDIA Nemotron 3 Nano** | scouts' helpers, Critic, Auditor, citation checks, context compression, query expansion, memory extraction, fallback reranker |
-| `reason` | **NVIDIA Nemotron 3 Super** | intake, planner, Lead Researcher, Scouts, novelty mapping, Chamber speakers, report, research chat |
-| `judge` | **NVIDIA Nemotron 3 Ultra** | the Speaker's green / amber / red ruling |
-| `embed` | **Qwen3-Embedding-8B** (Matryoshka 1024-d) | dense retrieval, HyDE, paper similarity graph, episodic chat memory |
-| rerank | **NVIDIA NeMo Retriever reranking NIM** · vLLM (Qwen3-Reranker-8B) · local bge-reranker-v2-m3 / MiniLM · Nemotron Nano | cross-encoder reranking, relevance triage, evidence gate |
-| inference | **Nebius Token Factory** (OpenRouter as stand-in, same models) | every LLM + embedding call; provider chosen by key (`providers.py`) |
-| web | **Tavily** search + extract | live web scouting, full-text reading; credit budget + cache |
-| scholarly | arXiv · OpenAlex · Hugging Face Papers · Semantic Scholar | paper search, citation graph, bibliometrics, adoption signals |
-| GPU (optional) | RTX PRO 6000 (CUDA) | heavy local reranker / self-hosted vLLM reranker |
+| **NVIDIA Nemotron 3** (Nano 30B · Super 120B · Ultra 550B) | Every agent. Super runs the Lead Researcher, Scouts, debate and report; Nano does the high-volume checks (Critic, audits, citation checks, compression, memory, knowledge graph); Ultra is the 3-judge Speaker panel that rules the verdict | 0.7-0.9 s per structured answer on Nebius; Ultra cost < $0.01 per run |
+| **Qwen3-Embedding-8B** (+ Qwen3-Reranker-8B on our GPU) | Dense retrieval over every paper, hypothetical-answer search (HyDE), the paper similarity graph and the chat's long-term memory; Qwen3-Reranker-8B is the first-choice reranker when our GPU serves it | 68 embedding calls for $0.001 in a full run |
+| **NVIDIA NeMo Retriever** | Reranking NIM (`llama-3.2-nv-rerankqa`) in the reranker chain, hosted or self-hosted | built and unit-tested; needs `NVIDIA_API_KEY` |
+| **Tavily** | Live web search (a guaranteed web sweep every run + the scouts' `search_web` tool) and Tavily Extract, which reads the full text of the closest papers | 24 web results and 3 new 2026 papers the scholarly indexes missed in one sweep; 6-12 full texts per run |
+| **Nebius** | Token Factory serves all Nemotron and Qwen models; our Nebius GPU (288 GB HBM3e) hosts the big reranker; deploy on a Nebius VM with Container Registry and Object Storage | full run 6-7 min on Token Factory vs 9.3 min on OpenRouter |
 
-Model roles resolve from the provider's live catalog unless pinned with `GLR_MODEL_*`; `GET /api/health` shows what
-was picked.
+Plus arXiv, OpenAlex, Hugging Face Papers and Semantic Scholar for papers, citations and credibility data.
 
-## What makes it agentic (the harness)
+---
 
-No agent framework. `backend/glr/harness/` is a hand-written runtime every agent runs on:
+## How it works
 
-| | |
+```
+ Intake chat ──▶ testable brief: research question, method, claimed contributions      (Nemotron Super)
+      │          your text is redacted (emails, names, keys…) before any model call or search
+      ▼
+ Planner ──▶ 2-5 idea components + search angles, always incl. 2 perspective angles
+      ▼
+ Lead Researcher ──dispatch──▶ Scout ∥ Scout ∥ Scout ∥ Scout          (each its own agent loop and context)
+      │   ▲  compressed reports only        arXiv · OpenAlex · HF Papers · Tavily · citation graph · full texts
+      │   └── Critic: round 1 is never final → targeted round 2
+      ▼
+ Web Scout (Tavily) ──▶ live web sweep for recent work the indexes miss
+      ▼
+ Relevance ranking (cross-encoder) → full texts (Tavily Extract) → credibility score ∥ Auditor (red flags)
+      ▼
+ Novelty matrix: idea components × closest papers, every overlap backed by a quote found in the paper,
+                 re-checked by a strict second judge
+      ▼
+ Debate: Proponent ∥ Skeptic → Speaker panel: 3 × Nemotron Ultra, majority vote
+      ▼
+ Guardrails in code (can only make the verdict more cautious) → green / amber / red
+      ▼
+ Report with comparison table → citation check → relationship graph → knowledge graph → research chat
+```
+
+---
+
+## Why it is built this way
+
+### 1. A verdict you can trust: four fixes from one failure
+
+We ran the same idea six times. The idea (route each token to a mixture of LoRA experts with a learned, load-balanced
+gate, evaluated on FLAN and MMLU) has real prior work (MoLoRA, MixLoRA, LLaVA-MoLE), so the correct verdict is amber
+or red.
+
+![Verdict per run](docs/benchmarks/01_verdict_per_run.png)
+
+Run 2 said **green**. Comparing it with run 1 showed why, and each finding became a change:
+
+| What we measured in run 2 | What we changed because of it |
 |---|---|
-| **Tools from signatures** | `@tool` turns a typed Python function into an OpenAI tool schema; args validated by pydantic; tools never raise (errors go back to the model) |
-| **Parallel tool calls** | all tool calls in one model turn run concurrently (`asyncio.gather`) |
-| **Sub-agent swarms** | `swarm()` runs agents concurrently with a limit; one failing never sinks the others; the Lead spawns scouts *through a tool* |
-| **Budgets** | USD / LLM calls / tool calls / wall clock, shared parent→child: a swarm can never outspend its run (`GLR_MAX_USD_PER_RUN`) |
-| **Loop detection** | identical `(tool, args)` returns a synthetic "already done" instead of re-running |
-| **Guards** | `before_tool` veto hook; finish only via a typed terminal tool; `review` hook = reflection gate (the Critic) |
-| **Forced finish** | at the step cap or budget limit only the finish tool is offered; last resort: JSON extraction from the transcript |
-| **Context engine** | tier 1 elides old tool results to per-tool digests (pairing intact), tier 2 folds whole turn groups into a Nano-written working memory, tier 3 pins task + memory + shared notebook in the system prompt. Every compression is traced with before/after tokens |
-| **Cross-agent compression** | the Lead sees only scouts' structured reports, never their raw search results |
-| **Shared blackboard** | `note` writes findings to a project notebook pinned into every agent's prompt |
-| **Chat memory** | pinned project state · long-term facts (Nano-extracted, de-duplicated) · token-budget rolling summary · episodic recall of similar earlier exchanges (Qwen3 embeddings) · in-turn compression |
-| **Self-correction** | chat + report sentences are citation-checked against the cited papers; chat answers with unsupported sentences are revised once and re-checked |
-| **Speaker panel** | 3 × Nemotron Ultra at temperature 0 with different lenses (overall / strict novelty / significance), majority vote; a split panel can't produce GREEN; peer-review scores (novelty, significance, soundness, feasibility, 1-10) averaged over the panel |
-| **Perspective scouts** | every run's round 1 includes "same mechanism, other field or modality" and "skeptical reviewer: is this incremental?" (enforced in code) |
-| **Trace** | every LLM call (provider, model, tokens, latency, cost), tool call, API call, spawn, compression and guardrail → live agent graph in the UI |
+| Only 50 papers overlapped with run 1 (97 vs 180); the Critic approved round 1, so MoLoRA, the closest paper, was never found | **A second research round is mandatory.** The Critic rejects round 1 until round 2 has run |
+| A strict judge downgraded all 19 "already done" overlaps to "partly", so novelty jumped from 0 to 50 | **The strict judge is mechanism-aware:** it only downgrades *setting* components (data, benchmarks); a mechanism used in another field still counts as done |
+| The Lead's own review said every core component was covered, yet nothing stopped the green | **New guardrail:** if the review finds every core component covered and very close papers exist, the verdict is at least amber |
+| LLaVA-MoLE does the same routing in a vision-language model and was easy to miss | **Two perspective scouts in every first round**, enforced in code: "same mechanism, other field or modality" and "skeptical reviewer: is this incremental?" (idea from STORM, see [our survey](docs/research/deep_research_landscape.md)) |
 
-## Credibility score (0–100, deterministic)
+![Papers per run](docs/benchmarks/04_papers_and_rounds.png)
+![Novelty per run](docs/benchmarks/05_novelty_per_run.png)
 
-`backend/glr/credibility.py` — never an LLM opinion; every component shows its evidence in the UI.
+**Speaker panel.** One judge is a single point of failure, so three Nemotron Ultra Speakers vote. Our first panel
+sampled two of them at temperature 0.6, and in two runs only 1 of 3 votes came back: at that temperature Ultra ignored
+the output format (`"verdict": "Proponent"`, no colour). **Because of that, all three run at temperature 0 and get
+their diversity from different judging lenses** (overall, strict novelty, significance). On the latest debate all three
+votes were valid: 3/3 amber. A split panel can never produce green.
+
+Result: after these fixes no run has gone green on this idea (runs 3 and 5 amber; run 4 red, from the "already done"
+guardrail while the panel was still broken).
+
+### 2. Tavily web sweep in every run
+
+The runs above made only 0-1 Tavily web searches each: the scouts preferred arXiv and OpenAlex. But scholarly indexes
+lag behind the newest work. **Because of that, every run now ends research with a Web Scout**: Tavily searches the
+plan's key queries over the last year, and any arXiv papers it finds join the paper set and are relevance-ranked. On
+the latest project one sweep returned 24 web results and **3 new 2026 arXiv papers** (for example "MoE2-LoRA: When MoE
+Models Meet MoE-style Low-Rank Adaptation") that the scouts had missed. Scouts are also told to use Tavily for recent
+work. Tavily Extract already reads the full text of the closest papers (6-12 per run).
+
+### 3. Retrieval: each stage kept for a measured reason
+
+Eval: 40 questions written from passages in the project's own 180-paper corpus (paraphrased, at most 3 consecutive
+words copied) plus 12 off-topic questions; gold = the exact source passage.
+
+![Retrieval quality](docs/benchmarks/07_retrieval_quality.png)
+
+- **Hybrid search (BM25 + Qwen3-Embedding-8B, reciprocal rank fusion) is the base** because it matched the best recall
+  (0.950 Recall@5) with the best ranking (0.877 MRR@10) at 6 ms. Dense alone scored 0.900 / 0.806.
+- **The cross-encoder reranker stays** even though it added no recall on these questions, because its top score
+  separates answerable from off-topic questions perfectly (**AUROC 1.0**). That powers the evidence gate: agents get
+  `sufficient_evidence: false` instead of answering from weak passages.
+- **Query expansion runs with a 6 s deadline** because it first cost 11.85 s per query and did not raise recall on
+  this set. Search starts on the original query and uses the Nemotron Nano paraphrases + hypothetical answer only if
+  they arrive in time (1.6 s per expanded query in the eval).
+
+![Retrieval latency](docs/benchmarks/08_retrieval_latency.png)
+
+**Which reranker.** We measured 40 real passages on an M-series Mac:
+
+![Reranker latency](docs/benchmarks/09_reranker_latency.png)
+
+**Because bge-reranker-v2-m3 took 13-17 s there, the reranker is chosen by hardware.** On our **Nebius GPU** (288 GB
+HBM3e), a vLLM server with **Qwen3-Reranker-8B** is auto-detected every 60 s and goes first; next is the **NVIDIA
+NeMo Retriever** reranking NIM, then a local cross-encoder (bge-reranker-v2-m3 on an NVIDIA GPU, MiniLM-L-12 at 1.5 s
+on a laptop), then **Nemotron Nano**. A Nebius run made 90 reranker calls with 0 errors.
+
+### 4. Every claim grounded in the paper's own text
+
+**Citations normalised before checking.** The first report had only 3 checkable claims and a chat answer had 0,
+because the model wrote `P7` and `(P66)` instead of `[P7]`. **Because of that, every citation is normalised to `[P#]`**
+before the citation checker (Nemotron Nano) judges each sentence against the cited paper. Reports now get 15-16 claims
+checked.
+
+![Citation check](docs/benchmarks/06_citation_check.png)
+
+**Citation graph from the papers' own bibliographies.** OpenAlex had reference lists for only 5 of 49 recent arXiv
+papers, and keyless Semantic Scholar was rate-limited. **Because of that, we parse each paper's bibliography from its
+arXiv HTML page** (53 of 60 papers covered). Each citation edge keeps the reference line as proof; graphs went from
+36 to 71 citation links.
+
+![Citation graph sources](docs/benchmarks/13_citation_graph_sources.png)
+
+**Knowledge graph only keeps what the paper says.** The first entity extraction produced 153 entities, including
+"datasets" like "five benchmarks". **Because of that, an entity is kept only if its name appears in the paper's text,
+vague dataset names are dropped, and gaps are computed only between entities used by 2+ papers.** Result: 119 grounded
+entities, 29 results with numbers, and a real gap: no collected paper tests MoLE on MMLU or GSM8K, which is exactly
+the idea's open part.
+
+![Knowledge graph cleanup](docs/benchmarks/14_knowledge_graph_cleanup.png)
+
+### 5. Credibility computed, never generated
+
+The score (0-100) is a fixed formula so it is explainable and reproducible:
 
 | Component | Weight | From |
 |---|---|---|
-| Impact | 35% | OpenAlex citation percentile + FWCI (field-normalised), citations/year, S2 influential citations |
+| Impact | 35% | OpenAlex citation percentile + field-weighted citation impact, citations per year, S2 influential citations |
 | Authors | 25% | h-index of the strongest author (+ median author) |
-| Venue | 15% | peer-reviewed venue h-index; preprints score low (not reviewed) |
-| Adoption | 15% | released code, Hugging Face models / datasets / Spaces built on it, HF upvotes |
-| Integrity | 10% | Auditor red flags (weak baselines, tiny samples, over-claiming…) **only if the quote is verified in the paper** |
+| Venue | 15% | peer-reviewed venue h-index; preprints score low |
+| Adoption | 15% | released code, Hugging Face models / datasets / Spaces built on it |
+| Integrity | 10% | Auditor red flags, counted only if the quoted problem is found in the paper |
 
-Retracted → 0. Papers < 18 months old get their impact weight moved to authors/venue (confidence "low") instead of
-being punished for missing citations. Identity is verified: OpenAlex records are accepted only if the title matches
-(OpenAlex maps LoRA's DOI to an unrelated paper; we refuse it and fall back to Semantic Scholar).
+Retracted → 0. Papers under 18 months old move their impact weight to authors/venue instead of being punished for few
+citations.
 
-## Retrieval pipeline
+![Credibility examples](docs/benchmarks/12_credibility_examples.png)
 
-`corpus.retrieve()`: **query expansion** (Nemotron Nano: 2 paraphrases + a HyDE passage, with a 6 s deadline) →
-**BM25 + Qwen3-Embedding-8B** recall for every variant, fused by weighted **RRF** → **cross-encoder rerank** of the top 40
-→ **calibrated evidence gate** (`sufficient_evidence: false` when the top score is below the threshold measured for
-that reranker) → **MMR** diversity → **±1 neighbour context**. Full-text chunks carry a contextual title header.
-Every search result is also **relevance-triaged** against the research idea by the cross-encoder.
+Two measured problems shaped it:
+- **Strict paper identity.** Looking up "LoRA" returned "LoRTA" (character similarity 0.9 passed a fuzzy match), and
+  OpenAlex maps LoRA's DOI to an unrelated paper. **Because of that, titles must match exactly** (or differ by one word
+  at 0.95 similarity) and mismatched records are refused.
+- **Unknown is not zero.** LLaVA-MoLE scored 10/100 with "0 citations" because a citation hop had stored its id and
+  enrichment skipped the bibliometrics. **Because of that, enrichment tracks whether bibliometrics were fetched, and
+  unknown citations score as unknown.** It now scores 32/100 from real data.
 
-Reranker chain (`rerank.py`, first available wins): **NVIDIA NeMo Retriever NIM** (`NVIDIA_API_KEY` or self-hosted)
-→ any **vLLM `/rerank`** endpoint (e.g. Qwen3-Reranker-8B on our RTX PRO 6000) → **local cross-encoder**
-(bge-reranker-v2-m3 on CUDA, MiniLM-L-12 on Mac) → **Nemotron Nano** listwise grading.
+### 6. Long agent runs: context compression
 
-## Research chat memory (5 layers) + self-correction
+Scouts and the Lead pass 16-26k tokens of search results within a few steps.
 
-1. **Pinned project state**: brief, verdict, novelty, closest papers, shared notebook, always in the system prompt.
-2. **Long-term facts**: after every exchange Nemotron Nano extracts durable facts (decisions, idea changes,
-   preferences, findings with [P#], open questions); de-duplicated, max 40, pinned, shown in the Chat sidebar.
-3. **Rolling summary**: when the verbatim history exceeds 5k tokens, older turns are folded by Nano (last 6 kept).
-   The intake chat folds the same way (4k-token budget).
-4. **Episodic recall**: every exchange is embedded with Qwen3; the most similar earlier exchanges are recalled
-   verbatim for a new message, even after they were folded away.
-5. **In-turn compression**: the harness elides/folds tool results inside a long agent turn.
+![Context compression](docs/benchmarks/11_context_compression.png)
 
-After answering, citations are normalised to `[P#]` and every cited sentence is checked against the cited papers'
-passages. If any is unsupported, the agent revises the answer once and the revision is re-checked (kept only if not
-worse); anything still unsupported is marked ⚠️ in the answer.
+**Because of that, every agent compresses in three tiers:** (1) old tool results become one-line digests while each
+tool call keeps its result, (2) the oldest steps are folded into a working memory by Nemotron Nano, (3) the task,
+working memory and shared notebook stay pinned. The Lead only ever sees scouts' structured reports. Live: scouts
+17.3k → 8.6k tokens, the Lead 25.7k → 10.8k.
 
-## Relationship graph
+The research chat uses the same idea with five memory layers: pinned project state, long-term facts extracted after
+every exchange (decisions, idea changes, findings with paper ids; one live turn stored 5), a rolling summary once
+history passes 5k tokens, recall of the most similar earlier exchanges by Qwen3 embedding, and in-turn compression.
 
-3D force-directed graph of the ~60 most relevant papers plus the idea (`graph.py`, `three/PaperGraph.tsx`).
-- **cites** edges from reference lists: Semantic Scholar batch (with key) → OpenAlex `referenced_works` → the paper's
-  own bibliography parsed from its arXiv HTML page (matched by arXiv id or exact 5+-word title). Each edge keeps the
-  reference line as proof. Particles flow from citing to cited paper.
-- **similar** edges: nearest neighbours of Qwen3 abstract embeddings (adaptive 88th-percentile threshold).
-- **idea** edges: the Lead Researcher's relation (same idea / very close / related).
-- **clusters**: weighted label propagation, labelled by distinctive title words (no LLM).
-- Click a paper → who it cites, who cites it, what it resembles, each with an **Explain** button (Nemotron Nano, cached).
+### 7. Nebius Token Factory, and each Nemotron model on the job it is worth
 
-## Knowledge graph of entities
+**All models run on Nebius Token Factory** because it was faster on the same Nemotron models: 0.7-0.9 s per structured
+answer for Nano, Super and Ultra, a median call of 0.95 s, and full runs of 6-7 min vs 9.3 min on OpenRouter.
 
-`kg.py` + Knowledge tab: Nemotron Nano extracts methods, datasets, tasks, metrics and headline results from the 30
-most relevant papers. An entity is kept only if its name appears in that paper's text, a result only if its number
-does, and vague dataset names ("five benchmarks") are dropped. Names merge by a normalised key ("Mixture-of-Experts
-(MoE)" = "mixture of experts"). Outputs: most-used entities, a **method × dataset coverage matrix whose empty cells
-are candidate experiments** ("no collected paper evaluates MoLE on MMLU / GSM8K" on the live project), and a results
-table. The research chat can query it with the `knowledge_graph` tool. Live: 119 entities from 30 papers, 29 results,
-44 ungrounded or vague names dropped.
+![Run time](docs/benchmarks/02_run_time_minutes.png)
 
-## Using our Nebius GPU (288 GB HBM3e) — auto-detected
+**Each model gets the job it is worth:** Super runs the agents, Nano the high-volume checks, and Ultra only the
+Speaker ruling, where judgment matters most. In a Nebius run Ultra cost under $0.01 and the Qwen3 embeddings $0.001.
 
-The app runs fine without it; when the GPU's servers answer, the big models are used automatically.
-- **Reranker (auto):** serve Qwen3-Reranker-8B with vLLM on the GPU and set `GLR_RERANK_URL=http://<gpu>:8001/rerank`.
-  `rerank.probe_gpu()` checks it every 60 s; while it answers it is first in the chain, otherwise the chain falls back
-  to NIM → local cross-encoder → Nemotron. `GET /api/health` shows `gpu_reranker: true/false`.
-- **Local cross-encoder (auto):** on a CUDA machine the default becomes bge-reranker-v2-m3 (568M) instead of MiniLM.
-- **LLMs (config switch):** Token Factory stays the default. To run Nemotron on the GPU instead, serve it with vLLM
-  (Super 120B in FP8 is ~130 GB and fits) and point `NEBIUS_BASE_URL` at the vLLM `/v1` endpoint; model roles resolve
-  from that server's `/models`. Automatic per-role failover between the GPU and Token Factory is not built yet.
+![Cost by model](docs/benchmarks/10_cost_by_model.png)
 
-## Verdict guardrails (code, after the Speaker)
+| Role | Model | Used for |
+|---|---|---|
+| `fast` | NVIDIA Nemotron 3 Nano 30B | Critic, Auditor, citation checks, compression, query expansion, memory, knowledge graph, fallback reranker |
+| `reason` | NVIDIA Nemotron 3 Super 120B | intake, planner, Lead Researcher, Scouts, novelty mapping, debate, report, chat |
+| `judge` | NVIDIA Nemotron 3 Ultra 550B | the Speaker panel |
+| `embed` | Qwen3-Embedding-8B (1024-dim) | retrieval, HyDE, paper similarity, chat memory |
 
-- A paper with credibility ≥ 35 and a **verified full overlap on every core component** → forced **RED** ("already done").
-  Low-credibility or retracted "same idea" papers can't force red; they push to at least amber.
-- Any core component fully covered by credible verified work → at least **AMBER**.
-- Thin evidence (< 10 papers or low review confidence) → at least **AMBER**: no green on a search that could have missed prior work.
-- The Speaker's original call is kept and shown next to the guardrail reason.
+---
 
-## Benchmarks (all measured, none estimated)
+## What else is in the box
 
-**Live end-to-end runs**, same idea ("per-token sparse mixture of LoRA experts for multi-task instruction tuning"):
+**Agent harness** (`backend/glr/harness/`, no framework): typed tools from Python signatures (errors go back to the
+model, never crash the run), parallel tool calls, sub-agent swarms, budgets in USD / calls / time shared parent →
+child, loop detection, a review hook (the Critic), forced finish at the step or budget limit, and a full trace of every
+call with model, tokens and latency.
 
-| | OpenRouter (Nemotron) | Nebius, before fix | **Nebius, after verdict fix** |
-|---|---|---|---|
-| Wall time / cost | 9.3 min / $0.0995 | 6.2 min / $0.195 | **7.4 min / $0.290** |
-| Median LLM call latency | – | 0.95 s | – |
-| Agents / LLM calls / tool calls | 20 / 217 / 71 | 19 / 168 / 38 | 19 / 202 / 57 |
-| Cost by model | – | Super $0.180 (62 calls), Ultra $0.008 (1), Nano $0.005 (37), Qwen3 embed $0.001 (68) | – |
-| Research rounds / scouts | 2 / 6 (Critic rejected round 1) | 1 / 3 (Critic approved) | 2 / 5 (round 2 mandatory) |
-| Papers collected / scored / audited | 180 / 80 / 8 | 97 / 80 / 5 (all 97 relevance-ranked) | 116 / 80 / – (MoLoRA found again) |
-| Context compressions | 17.3k → 8.6k, 25.7k → 10.8k tokens | 16.2k → 9.4k, 25.8k → 10.1k tokens | 3 |
-| Reranker calls / errors | – (added later) | 90 / 0 | – |
-| Novelty | 0/100 (P7 covered every core component) | 50/100 (strict judge downgraded 19 "full" → "partial"; 4 unverified quotes dropped) | 21/100 (C1, C3 full; 0 strict downgrades; 13 unverified quotes dropped) |
-| Verdict | **AMBER**, guardrails agreed | **GREEN**, no guardrail fired | **AMBER** (Speaker at temperature 0) |
-| Report citation check | 1 supported / 2 partial / 0 unsupported (before the [P#] fix) | 3 / 9 / 3 of 15 claims | 3 / 11 / 2 of 16 claims |
-| Relationship graph | 60 papers, 36 citation links, 89 similarity, 5 clusters | 60 papers, **71 citation links**, 84 similarity, 7 clusters | – |
+**Guardrails** (`agents/verdict.py`), applied after the Speaker panel; they can only make the verdict more cautious:
+a credible paper (≥ 35/100) covering every core component with verified quotes → red; a core component fully covered
+by credible work, a split panel, thin evidence (< 10 papers or low review confidence), or a review that finds every
+core component covered → at least amber. The panel's original call is kept and shown.
 
-Honest reading: the first Nebius run went GREEN, mainly because of our own code, not the provider. That run searched
-less (the Critic approved round 1 and MoLoRA, the closest paper, was never found), and a new strict novelty judge
-downgraded every overlap to "partial" while the Lead Researcher's own review said the core was covered. Same models
-still differ between runs (temperature 0.2-0.3 agents, different serving stacks, live web). Fix (`f9aca8d`): a second
-research round is mandatory, the strict judge only downgrades *setting* components (a mechanism used in another
-domain still counts as fully covered), judges run at temperature 0, and a new guardrail keeps the verdict at least
-AMBER when the review finds every core component covered. Re-run on Nebius: **AMBER**, two rounds, MoLoRA found.
+**Workspace tabs:** Verdict (traffic light, reasons, guardrails, review scores for novelty / significance / soundness /
+feasibility) · Agents (live agent graph and trace) · Paper galaxy (3D) · Relationship graph (3D citations with proof,
+similarity, clusters, "explain this link") · Knowledge (methods, datasets, metrics, method × dataset gaps, results) ·
+Papers (credibility breakdowns, relevance, audits) · Novelty matrix · Chamber (3D debate) · Report (comparison table,
+citation check, Markdown export) · Chat (memory panel) · Notebook. Plus a Proof page (`#/proof`) for the retrieval eval.
 
-**After the survey quick wins** (Nebius, same idea, `d481c42` + lens panel): 2 rounds, 6 scouts incl. both
-mandatory perspective scouts ("same mechanism, other field", "reviewer: is this incremental?"), 124 papers, MoLoRA
-and LLaVA-MoLE found, comparison table in the report, **AMBER**, 7.0 min, $0.34. The 3-Speaker panel first lost 2 of 3
-votes (Ultra drops the output schema at temperature 0.6); now all three run at temperature 0 with different lenses
-(overall / strict novelty / significance) and return **3/3 AMBER** on that run's debate. One intermediate run (Speaker
-panel broken, round 2 skipped) went RED via the "already done by MixLoRA" guardrail: verdicts sit on the AMBER/RED
-boundary for this idea, never GREEN since the fixes.
+**Accounts and spend:** Google sign-in with private projects per user, an invite list (`GLR_ALLOWED_EMAILS`), and daily
+caps on LLM spend and runs for a public deploy. Everything a user types is redacted before storage, model calls or
+search.
 
-**Retrieval eval** (`make eval P=<id>`; 40 synthetic paraphrased questions written from the project's own passages,
-gold = exact source chunk, 180-paper corpus; partial run, the "hard" no-shared-vocabulary set was not run yet):
-
-| Pipeline | Recall@5 | MRR@10 | Latency |
-|---|---|---|---|
-| BM25 | 0.950 | 0.874 | 5 ms |
-| Dense (Qwen3-Embedding-8B) | 0.900 | 0.806 | 759 ms |
-| Hybrid RRF | 0.950 | 0.877 | 6 ms |
-| Hybrid + expansion | 0.900 | 0.830 | 1.6 s |
-| Hybrid + rerank (MiniLM-L-12) | 0.900 | 0.857 | 1.9 s |
-| Evidence gate (MiniLM-L-12), answerable vs 12 off-topic | **AUROC 1.0** | | |
-
-Honest reading: on paraphrased questions keyword search is already near the ceiling, so expansion and reranking
-don't add recall here; their value is the evidence gate (perfect separation of answerable vs off-topic questions)
-and vocabulary-mismatch queries, which the "hard" set measures (not run yet).
-
-**Reranker latency** (40 real passages, M-series Mac): MiniLM-L-12 1.5 s · bge-reranker-base 4.6 s ·
-bge-reranker-v2-m3 13–17 s (MPS) / 16–23 s (CPU) → v2-m3 is the default only on CUDA.
-
-**Other measurements from live runs**
-
-| What | Result |
-|---|---|
-| Nebius Token Factory smoke test | models resolved: `NVIDIA-Nemotron-3-Nano-30B-A3B`, `nemotron-3-super-120b-a12b`, `Nemotron-3-Ultra-550b-a55b`, `Qwen3-Embedding-8B`; structured JSON 0.7–0.9 s per role; tool call OK ($0.00014) |
-| Credibility, "Attention Is All You Need" | 78/100 strong (77,978 citations, 300 HF models) |
-| Credibility, LLaVA-MoLE before/after bibliometrics fix | 10/100 ("0 citations", data never fetched) → 32/100 (8 citations, author h-index 33) |
-| Paper identity check | fuzzy title match merged "LoRA" with "LoRTA" → now strict; OpenAlex maps LoRA's DOI to an unrelated paper → refused |
-| OpenAlex reference-list coverage (recent arXiv papers) | 5 / 49 → why the graph parses arXiv bibliographies (53 / 60) |
-| Keyless Semantic Scholar | 429 rate-limited → used only with `S2_API_KEY` or as a cooled-down fallback |
-| Context compression (live) | scouts 17.3k → 8.6k tokens, Lead 25.7k → 10.8k (tier-1 elision) |
-| Chat long-term memory (live, 1 turn) | stored 1 decision + 1 preference + 2 findings with [P#] + 1 open question; vectors never sent to the UI |
-| Chat answer before citation normalisation | wrote "(P66)" → 0 claims checked → fixed: normalised to [P66], all checkable |
-| Local reranker first load | ~160 s incl. 2.3 GB model download (bge-reranker-v2-m3), then cached |
-
-**Offline tests**: 35 passing (`make test`), incl. Sachit's auth / spend-cap guards: harness (parallel tools, loop detection, review gate, budget-forced
-finish, tier-1/2 compression with tool-call pairing checked on every request, child budgets, chat memory layers),
-credibility, quote verification, citation normalisation, guardrails, strict title identity, graph citation matching
-+ clustering, MMR, reranker fallback, gate calibration.
-
-## Invariants (the pitch)
-
-1. **Redact before anything leaves the machine** (`privacy.py`, ported from GreenLight): ideas, chat messages and every
-   search query.
-2. **Claims about papers need the paper's own words.** Novelty overlaps and audit flags must quote the paper; quotes are
-   verified against its text; unverified → not counted. Report sentences are citation-checked; unsupported ones are marked.
-3. **Verdict colour is guardrailed, not purely LLM** (`agents/verdict.py`).
-4. **Credibility is computed, not generated.**
-5. **Nothing is faked.** No seeded data; every number in the UI comes from a run.
+---
 
 ## Run it
 
 ```bash
-cp .env.example .env      # OPENROUTER_API_KEY or NEBIUS_API_KEY, TAVILY_API_KEY (+ optional OPENALEX_API_KEY, S2_API_KEY)
-make setup                # uv sync --extra local (torch + sentence-transformers) + npm install
-make dev                  # API :8100 + UI :5180
-make test                 # offline tests (scripted model: harness, compression, budgets, scoring, guardrails, auth)
-make eval P=<project_id>  # retrieval eval + evidence-gate calibration (results on the Proof page, #/proof)
-make check                # tsc + vite build + oxlint + import check + tests
+cp .env.example .env    # NEBIUS_API_KEY, TAVILY_API_KEY (+ optional OPENALEX_API_KEY, S2_API_KEY, NVIDIA_API_KEY)
+make setup              # uv sync --extra local (torch + sentence-transformers) + npm install
+make dev                # API on :8100, UI on :5180
+make test               # 35 offline tests: scripted model, no keys or network
+make check              # tsc + vite build + oxlint + import check + tests
+make eval P=<project>   # retrieval eval + evidence-gate calibration (results on #/proof)
 ```
 
-Sign-in: set `GOOGLE_CLIENT_ID` for Google sign-in (projects are private per user); without it, localhost runs as a
-built-in local user. **Deploy**: one container (`Dockerfile`) + Caddy on a Nebius VM, see [`deploy/nebius.md`](deploy/nebius.md).
+The landing page is `#/`, the app `#/app`. Without `GOOGLE_CLIENT_ID`, localhost runs as a single local user.
+`GET /api/health` shows the provider, the models picked for each role, the reranker chain and whether the GPU
+reranker is detected.
 
-UI: landing (three.js idea-in-a-galaxy hero) → intake chat with quick replies and a live brief → workspace tabs:
-**Verdict** · **Agents (live)** (agent graph + trace) · **Paper galaxy** (3D, orbit = closeness, colour = credibility)
-· **Relationship graph** (3D force graph: citation links with the reference line as proof, embedding similarity,
-auto-clusters, "explain how these two relate")
-· **Knowledge** (entities, method × dataset gaps, results) · **Papers** (credibility breakdowns, relevance, audits, links) · **Novelty matrix** (verified quotes, strict-judge
-downgrades) · **Chamber** (3D chamber + transcript) · **Report** (citation check, **Export .md**) · **Chat** (memory
-panel, self-correction) · **Notebook**. Header: traffic light, **Stop** / **Re-run**. **Proof** page (`#/proof`):
-retrieval eval table + gate calibration.
+**Use the Nebius GPU** (optional; everything works without it): serve Qwen3-Reranker-8B with vLLM on the GPU and set
+`GLR_RERANK_URL=http://<gpu-host>:8001/rerank`; it is picked up automatically. To run Nemotron on the GPU too, serve it
+with vLLM (Super in FP8 is about 130 GB) and point `NEBIUS_BASE_URL` at its `/v1` endpoint.
 
-## Configuration (`.env`, see `.env.example`)
+**Deploy on Nebius:** one Compute VM with the app container and Caddy for HTTPS, models on Token Factory, image in
+Container Registry, SQLite backups to Object Storage. Step by step in [`deploy/nebius.md`](deploy/nebius.md).
 
-| Var | Purpose |
+### Configuration
+
+| Variable | Purpose |
 |---|---|
-| `NEBIUS_API_KEY` / `OPENROUTER_API_KEY` | LLM + embeddings (Nebius wins when both are set); `GLR_LLM_PROVIDER` forces one |
-| `TAVILY_API_KEY`, `GLR_TAVILY_BUDGET` | live web; stop at this many credits |
-| `OPENALEX_API_KEY`, `OPENALEX_MAILTO` | OpenAlex own daily budget (keyless is a small shared per-IP budget) |
-| `S2_API_KEY` | Semantic Scholar: influential citations, fallback bibliometrics, batch reference lists |
-| `HF_TOKEN` | higher Hugging Face rate limits |
-| `NVIDIA_API_KEY`, `GLR_NIM_RERANK_URL`, `GLR_NIM_RERANK_MODEL` | NeMo Retriever reranking NIM (hosted or self-hosted) |
-| `GLR_RERANK_URL`, `GLR_RERANK_MODEL`, `GLR_RERANK_KEY` | any `/rerank` server (e.g. vLLM + Qwen3-Reranker-8B) |
+| `NEBIUS_API_KEY`, `NEBIUS_BASE_URL` | Token Factory (or your own vLLM `/v1` endpoint); `GLR_LLM_PROVIDER` forces a provider |
+| `TAVILY_API_KEY`, `GLR_TAVILY_BUDGET`, `GLR_TAVILY_SEARCH_DEPTH` | Tavily web search + extract, credit cap, depth |
+| `OPENALEX_API_KEY`, `OPENALEX_MAILTO`, `S2_API_KEY`, `HF_TOKEN` | scholarly sources with their own rate limits |
+| `GLR_RERANK_URL`, `GLR_RERANK_MODEL`, `GLR_RERANK_KEY` | GPU / vLLM reranker, Qwen3-Reranker-8B by default (auto-detected) |
+| `NVIDIA_API_KEY`, `GLR_NIM_RERANK_URL`, `GLR_NIM_RERANK_MODEL` | NVIDIA NeMo Retriever reranking NIM |
 | `GLR_RERANKER`, `GLR_RERANK_LOCAL_MODEL` | force a reranker backend / local model |
-| `GLR_QUERY_EXPANSION`, `GLR_EXPANSION_DEADLINE` | multi-query + HyDE on/off, deadline in seconds |
-| `GLR_MAX_USD_PER_RUN`, `GLR_RESEARCH_ROUNDS`, `GLR_MAX_SCOUTS`, `GLR_CONTEXT_BUDGET`, `GLR_PAPERS_TO_READ` | harness budgets |
+| `GLR_QUERY_EXPANSION`, `GLR_EXPANSION_DEADLINE` | query expansion on/off, deadline (6 s) |
+| `GLR_MAX_USD_PER_RUN`, `GLR_RESEARCH_ROUNDS`, `GLR_MAX_SCOUTS`, `GLR_CONTEXT_BUDGET`, `GLR_PAPERS_TO_READ` | per-run budgets (defaults $0.75, 2, 4, 24k tokens, 8) |
+| `GLR_MAX_USD_PER_DAY`, `GLR_MAX_RUNS_PER_DAY` | daily caps for a public deploy |
+| `GOOGLE_CLIENT_ID`, `GLR_ALLOWED_EMAILS`, `GLR_AUTH` | sign-in, invite list, auth mode |
 | `GLR_THINKING`, `GLR_MODEL_FAST/REASON/JUDGE/EMBED` | Nemotron reasoning traces; pin model ids |
+| `GLR_PUBLIC_BASE_URL`, `GLR_DB_PATH`, `GLR_CACHE_WEB`, `GLR_CORS_ORIGINS` | host, database, web cache, CORS |
 
-## API
+### API
 
 | Endpoint | |
 |---|---|
-| `GET /api/health` | keys, provider, models, reranker chain, Tavily credits |
-| `POST /api/projects` · `POST/GET /api/projects/{id}/intake` | start + continue the intake chat |
+| `GET /api/health` | keys, provider, models, reranker chain, GPU reranker |
+| `GET /api/auth/me` · `POST /api/auth/google` · `POST /api/auth/logout` | sign-in |
+| `POST /api/projects` · `GET/POST /api/projects/{id}/intake` | start and continue the intake chat |
 | `POST /api/projects/{id}/start` · `/stop` · `/rerun` · `DELETE /api/projects/{id}` | run control |
-| `GET /api/projects/{id}` · `/trace?after=` · `/papers/{pid}` · `POST /papers/{pid}/score` | workspace data, live trace, paper detail, on-demand credibility |
-| `GET /api/projects/{id}/graph` · `POST /graph/explain` | relationship graph, explain one link |
-| `POST/GET /api/projects/{id}/chat` | research chat (+ long-term memory items) |
-| `GET /api/evals` · `POST /api/evals/retrieval/{id}` | Proof page results, run the retrieval eval |
+| `GET /api/projects` · `GET /api/projects/{id}` · `/trace` · `/papers/{pid}` · `POST /papers/{pid}/score` | projects, live trace, papers, on-demand credibility |
+| `GET /api/projects/{id}/graph` · `POST /graph/explain` · `GET /knowledge` | relationship graph, explain a link, knowledge graph |
+| `GET/POST /api/projects/{id}/chat` | research chat (+ long-term memory) |
+| `GET /api/evals` · `POST /api/evals/retrieval/{id}` | Proof page |
 
-## Known limitations
+---
 
-- No sign-in or per-user data yet (single local user): don't expose it publicly. GreenLight's Google auth can be ported.
-- SQLite only; hosting needs Postgres/pgvector (as in GreenLight) and the Nebius Serverless deploy is not done.
-- The retrieval eval was only partly run (paraphrased set); the "hard" vocabulary-mismatch set and gate calibration
-  need `make eval` once. Until then the evidence gate is off.
-- NVIDIA NIM and vLLM reranker backends are implemented but untested without keys/GPU here.
-- Verdict stability: fixed for the tested idea (AMBER on OpenRouter and on Nebius after the fix); only 3 runs so far,
-  so stability on other ideas is not yet measured.
-- A pipeline run takes ~9 min; the dev server's `--reload` kills a running analysis when backend files change.
+## Tests
 
-## Demo checklist (15 min before judging)
+35 offline tests (`make test`, scripted model, no keys or network): agent harness (parallel tools, loop detection,
+review gate, budget-forced finish, compression keeping tool calls paired, child budgets, chat memory), verdict and
+guardrails, credibility and paper identity, retrieval (quote verification, MMR, reranker fallback, gate calibration,
+GPU auto-detect), graph and knowledge graph, and access and spend caps.
 
-1. `.env`: `NEBIUS_API_KEY` (sponsor: must show **Nebius Token Factory**), `TAVILY_API_KEY`; ideally `OPENALEX_API_KEY`,
-   `NVIDIA_API_KEY` (NeMo Retriever reranker), `S2_API_KEY`.
-2. `make dev` in a terminal → `curl localhost:8100/api/health`: `llm_provider` = Nebius Token Factory, models =
-   Nemotron Nano/Super/Ultra + Qwen3-Embedding-8B, `rerankers.chain` starts with `nim` (or `local`).
-3. Start one fresh run (~9 min) and keep it open: Agents (live) graph while it runs, then Verdict → Relationship graph
-   → Novelty matrix → Chamber → Chat. **Stop** cancels a run; **Re-run** starts over.
-4. Run `make eval P=<project_id>` once: it writes `data/eval/calibration.json`, which switches on the
-   `sufficient_evidence` gate (until then the gate is off). Report tab → **Export .md** downloads the cited report.
-5. Not built: see Known limitations.
+## What is not proven yet
+
+- Verdict stability is shown on one idea over six runs; other ideas are not measured yet, and the final panel fix was
+  checked on a stored debate rather than a fresh run.
+- The Tavily web sweep is tested on one project; it has not yet run inside a fresh full run.
+- No verdict-accuracy benchmark yet. Planned: ideas taken from real 2025-26 papers, run with search allowed and with
+  search capped before the paper's publication date.
+- The retrieval eval is partial: the vocabulary-mismatch question set and the gate calibration need one `make eval`;
+  until then the evidence gate is off.
+- The NVIDIA NeMo Retriever NIM and GPU reranker paths are built and unit-tested but not run live.
+- Report citation support is modest: about 3 of 15 checked claims fully supported, most partial.
 
 ## Layout
 
 ```
 backend/glr/
-  harness/        agent.py (runtime loop, swarm) · context.py (3-tier compression) · tools.py (@tool, finish tools)
-  agents/         intake · planner · research (Lead, Scouts, Critic) · toolbox (+ relevance triage) · auditor · novelty
-                  (+ strict judge) · chamber · verdict · writer · chat (5-layer memory, self-correction)
-  sources/        arxiv · openalex · hf · s2 · http (per-host pacing, 429 cooldown, cache)
-  llm.py providers.py   Nemotron roles on Nebius / OpenRouter (from GreenLight)
-  papers.py credibility.py corpus.py verify.py   registry + enrichment · score · retrieval pipeline · quote/claim checks
-  rerank.py       NIM / vLLM endpoint / local cross-encoder / Nemotron reranker chain, calibrated thresholds
-  graph.py        relationship graph (citations, similarity, clusters, explain)
-  evals.py        retrieval eval + evidence-gate calibration (scripts/eval_retrieval.py)
-  budget.py trace.py db.py privacy.py web.py pipeline.py api.py
-backend/tests/    offline tests with a scripted model
-web/src/          React 19 + Tailwind 4 + three.js (three/: Constellation, PaperGalaxy, PaperGraph, ChamberScene, glass, core)
-                  views/: Agents · Papers · Graph · Novelty · Chamber · Report · Chat; ProofPage, Intake, Home
+  harness/     agent.py (agent loop, swarm) · context.py (3-tier compression) · tools.py (@tool, finish tools)
+  agents/      intake · planner · research (Lead, Scouts, Critic) · toolbox (tools, Tavily web sweep) · auditor
+               · novelty · chamber · verdict · writer · chat
+  sources/     arxiv · openalex · hf · s2 · http (per-host pacing, rate-limit cooldown, cache)
+  llm.py providers.py   model roles on Nebius Token Factory
+  corpus.py rerank.py   retrieval pipeline, reranker chain + GPU auto-detect
+  web.py       Tavily search + extract with credit budget and cache
+  papers.py credibility.py verify.py   paper registry, credibility score, quote and citation checks
+  graph.py kg.py evals.py   relationship graph, knowledge graph, retrieval eval
+  auth.py budget.py trace.py db.py privacy.py pipeline.py api.py
+backend/tests/   offline tests      backend/scripts/   retrieval eval
+web/src/         React 19 + Tailwind 4 + three.js (landing, app, workspace views, 3D scenes)
+deploy/          Nebius deploy guide, Caddy, backups      docs/   changelog, survey, benchmark charts
 ```
 
-Prior art we learned from: [researchAgent](https://github.com/Sachitbansal/researchAgent) (single-agent RAG over arXiv:
-hand-written loop, tool-pairing rules, abstention gate, arXiv rate-limit lessons) and GreenLight (providers, Chamber,
-guardrails, privacy, Tavily budget).
+Built on lessons from [researchAgent](https://github.com/Sachitbansal/researchAgent) (hand-written agent loop, evidence
+gate, arXiv rate limits) and GreenLight (provider plug-in, debate and guardrails, privacy), and a survey of 22
+open-source deep-research systems ([`docs/research/deep_research_landscape.md`](docs/research/deep_research_landscape.md)).
+Not legal or career advice: check the sources before relying on a verdict.
